@@ -8,8 +8,8 @@
  * 
  * IMPORTANT: Volume Tracking
  * - AMM: BuyTokens, SellTokens count as volume
- * - AMM: First LiquidityAdded has IMBALANCE that counts as volume
- * - PariMutuel: SeedInitialLiquidity counts as volume
+ * - AMM: LiquidityAdded imbalance does NOT count as volume (token rebalancing)
+ * - PariMutuel: SeedInitialLiquidity counts as volume (real capital entering)
  * - PariMutuel: PositionPurchased counts as volume
  * 
  * @module src/index
@@ -859,17 +859,16 @@ ponder.on("PredictionAMM:WinningsRedeemed", async ({ event, context }) => {
 
 /**
  * Handle LiquidityAdded event from PredictionAMM
- * IMPORTANT: First liquidity add has IMBALANCE that counts as volume!
+ * NOTE: Imbalance tokens returned to LP are NOT counted as volume
+ *       (they represent token rebalancing, not actual trading activity)
  * NOTE: Always update both market AND platform stats together for consistency
  */
 ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
-  const { provider, collateralAmount, lpTokens, amounts } = event.args;
+  const { provider, collateralAmount, lpTokens } = event.args;
   const timestamp = event.block.timestamp;
   const marketAddress = event.log.address;
   const chain = getChainInfo(context);
   const eventId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
-
-  const imbalanceVolume = (amounts.yesToReturn ?? 0n) + (amounts.noToReturn ?? 0n);
 
   // Create liquidity event record
   await context.db.liquidityEvents.create({
@@ -890,39 +889,23 @@ ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
   // Get or create market (handle race conditions safely)
   const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "amm", timestamp, event.block.number);
 
-  // Update market TVL and volume (if imbalanced)
+  // Update market TVL only (imbalance is NOT volume)
   await context.db.markets.update({
     id: marketAddress,
     data: {
       currentTvl: market.currentTvl + collateralAmount,
-      totalVolume: imbalanceVolume > 0n 
-        ? market.totalVolume + imbalanceVolume 
-        : market.totalVolume,
     },
   });
 
-  // Update platform stats
+  // Update platform stats - liquidity only, NOT volume
   const stats = await getOrCreatePlatformStats(context, chain);
   await context.db.platformStats.update({
     id: chain.chainId.toString(),
     data: {
       totalLiquidity: stats.totalLiquidity + collateralAmount,
-      totalVolume: imbalanceVolume > 0n 
-        ? stats.totalVolume + imbalanceVolume 
-        : stats.totalVolume,
       lastUpdatedAt: timestamp,
     },
   });
-
-  if (imbalanceVolume > 0n) {
-    const daily = await getOrCreateDailyStats(context, timestamp, chain);
-    await context.db.dailyStats.update({
-      id: makeId(chain.chainId, getDayTimestamp(timestamp).toString()),
-      data: {
-        volume: daily.volume + imbalanceVolume,
-      },
-    });
-  }
 });
 
 /**
@@ -1001,8 +984,8 @@ ponder.on("PredictionAMM:Sync", async ({ event, context }) => {
 
 /**
  * Handle SeedInitialLiquidity event from PredictionPariMutuel
- * NOTE: Seed liquidity is NOT volume - it's just initial TVL/liquidity
- * Volume only comes from actual trades (PositionPurchased)
+ * NOTE: Seed liquidity COUNTS as volume - it's real capital entering the market
+ * NOTE: Always update both market AND platform stats together for consistency
  */
 ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }) => {
   const { yesAmount, noAmount } = event.args;
@@ -1015,25 +998,36 @@ ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }
   // Get or create market (handle race conditions safely)
   const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "pari", timestamp, event.block.number);
 
-  // Update market TVL only (NOT volume - seed liquidity is not trading volume)
+  // Update market TVL AND volume (seed liquidity is real capital entering the market)
   await context.db.markets.update({
     id: marketAddress,
     data: {
       currentTvl: market.currentTvl + totalLiquidity,
+      totalVolume: market.totalVolume + totalLiquidity,
     },
   });
 
-  // Update platform stats - only liquidity, NOT volume
+  // Update platform stats - both liquidity AND volume
   const stats = await getOrCreatePlatformStats(context, chain);
   await context.db.platformStats.update({
     id: chain.chainId.toString(),
     data: {
       totalLiquidity: stats.totalLiquidity + totalLiquidity,
+      totalVolume: stats.totalVolume + totalLiquidity,
       lastUpdatedAt: timestamp,
     },
   });
 
-  console.log(`[${chain.chainName}] Seed liquidity: ${marketAddress} - ${totalLiquidity}`);
+  // Update daily stats with seed liquidity volume
+  const daily = await getOrCreateDailyStats(context, timestamp, chain);
+  await context.db.dailyStats.update({
+    id: makeId(chain.chainId, getDayTimestamp(timestamp).toString()),
+    data: {
+      volume: daily.volume + totalLiquidity,
+    },
+  });
+
+  console.log(`[${chain.chainName}] Seed liquidity (volume): ${marketAddress} - ${totalLiquidity}`);
 });
 
 /**
