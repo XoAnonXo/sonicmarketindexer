@@ -358,6 +358,7 @@ ponder.on("PredictionPoll:AnswerSet", async ({ event, context }) => {
 
 /**
  * Handle MarketCreated event from MarketFactory
+ * NOTE: Uses upsert pattern because other events may create minimal market records first
  */
 ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
   const { 
@@ -373,29 +374,61 @@ ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
   const timestamp = event.block.timestamp;
   const chain = getChainInfo(context);
 
-  await context.db.markets.create({
-    id: marketAddress,
-    data: {
-      chainId: chain.chainId,
-      chainName: chain.chainName,
-      pollAddress,
-      creator: creator.toLowerCase() as `0x${string}`,
-      marketType: "amm",
-      collateralToken: collateral,
-      yesToken,
-      noToken,
-      feeTier: Number(feeTier),
-      maxPriceImbalancePerHour: Number(maxPriceImbalancePerHour),
-      totalVolume: 0n,
-      totalTrades: 0,
-      currentTvl: 0n,
-      uniqueTraders: 0,
-      reserveYes: 0n,
-      reserveNo: 0n,
-      createdAtBlock: event.block.number,
-      createdAt: timestamp,
-    },
-  });
+  // Check if market already exists (could be created by other event handlers)
+  const existingMarket = await context.db.markets.findUnique({ id: marketAddress });
+  
+  if (existingMarket) {
+    // Update the existing minimal market record with full data
+    await context.db.markets.update({
+      id: marketAddress,
+      data: {
+        chainId: chain.chainId,
+        chainName: chain.chainName,
+        pollAddress,
+        creator: creator.toLowerCase() as `0x${string}`,
+        marketType: "amm",
+        collateralToken: collateral,
+        yesToken,
+        noToken,
+        feeTier: Number(feeTier),
+        maxPriceImbalancePerHour: Number(maxPriceImbalancePerHour),
+        // Preserve existing stats
+        totalVolume: existingMarket.totalVolume,
+        totalTrades: existingMarket.totalTrades,
+        currentTvl: existingMarket.currentTvl,
+        uniqueTraders: existingMarket.uniqueTraders,
+        reserveYes: existingMarket.reserveYes ?? 0n,
+        reserveNo: existingMarket.reserveNo ?? 0n,
+        createdAtBlock: event.block.number,
+        createdAt: timestamp,
+      },
+    });
+  } else {
+    // Create new market record
+    await context.db.markets.create({
+      id: marketAddress,
+      data: {
+        chainId: chain.chainId,
+        chainName: chain.chainName,
+        pollAddress,
+        creator: creator.toLowerCase() as `0x${string}`,
+        marketType: "amm",
+        collateralToken: collateral,
+        yesToken,
+        noToken,
+        feeTier: Number(feeTier),
+        maxPriceImbalancePerHour: Number(maxPriceImbalancePerHour),
+        totalVolume: 0n,
+        totalTrades: 0,
+        currentTvl: 0n,
+        uniqueTraders: 0,
+        reserveYes: 0n,
+        reserveNo: 0n,
+        createdAtBlock: event.block.number,
+        createdAt: timestamp,
+      },
+    });
+  }
 
   const user = await getOrCreateUser(context, creator, chain);
   await context.db.users.update({
@@ -428,6 +461,7 @@ ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
 
 /**
  * Handle PariMutuelCreated event from MarketFactory
+ * NOTE: Uses upsert pattern because other events may create minimal market records first
  */
 ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
   const { 
@@ -441,25 +475,53 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
   const timestamp = event.block.timestamp;
   const chain = getChainInfo(context);
 
-  await context.db.markets.create({
-    id: marketAddress,
-    data: {
-      chainId: chain.chainId,
-      chainName: chain.chainName,
-      pollAddress,
-      creator: creator.toLowerCase() as `0x${string}`,
-      marketType: "pari",
-      collateralToken: collateral,
-      curveFlattener: Number(curveFlattener),
-      curveOffset: Number(curveOffset),
-      totalVolume: 0n,
-      totalTrades: 0,
-      currentTvl: 0n,
-      uniqueTraders: 0,
-      createdAtBlock: event.block.number,
-      createdAt: timestamp,
-    },
-  });
+  // Check if market already exists (could be created by other event handlers)
+  const existingMarket = await context.db.markets.findUnique({ id: marketAddress });
+  
+  if (existingMarket) {
+    // Update the existing minimal market record with full data
+    await context.db.markets.update({
+      id: marketAddress,
+      data: {
+        chainId: chain.chainId,
+        chainName: chain.chainName,
+        pollAddress,
+        creator: creator.toLowerCase() as `0x${string}`,
+        marketType: "pari",
+        collateralToken: collateral,
+        curveFlattener: Number(curveFlattener),
+        curveOffset: Number(curveOffset),
+        // Preserve existing stats
+        totalVolume: existingMarket.totalVolume,
+        totalTrades: existingMarket.totalTrades,
+        currentTvl: existingMarket.currentTvl,
+        uniqueTraders: existingMarket.uniqueTraders,
+        createdAtBlock: event.block.number,
+        createdAt: timestamp,
+      },
+    });
+  } else {
+    // Create new market record
+    await context.db.markets.create({
+      id: marketAddress,
+      data: {
+        chainId: chain.chainId,
+        chainName: chain.chainName,
+        pollAddress,
+        creator: creator.toLowerCase() as `0x${string}`,
+        marketType: "pari",
+        collateralToken: collateral,
+        curveFlattener: Number(curveFlattener),
+        curveOffset: Number(curveOffset),
+        totalVolume: 0n,
+        totalTrades: 0,
+        currentTvl: 0n,
+        uniqueTraders: 0,
+        createdAtBlock: event.block.number,
+        createdAt: timestamp,
+      },
+    });
+  }
 
   const user = await getOrCreateUser(context, creator, chain);
   await context.db.users.update({
