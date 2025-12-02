@@ -1001,8 +1001,8 @@ ponder.on("PredictionAMM:Sync", async ({ event, context }) => {
 
 /**
  * Handle SeedInitialLiquidity event from PredictionPariMutuel
- * CRITICAL: This is VOLUME!
- * NOTE: Always update both market AND platform stats together for consistency
+ * NOTE: Seed liquidity is NOT volume - it's just initial TVL/liquidity
+ * Volume only comes from actual trades (PositionPurchased)
  */
 ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }) => {
   const { yesAmount, noAmount } = event.args;
@@ -1010,40 +1010,30 @@ ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }
   const marketAddress = event.log.address;
   const chain = getChainInfo(context);
 
-  const totalVolume = yesAmount + noAmount;
+  const totalLiquidity = yesAmount + noAmount;
 
   // Get or create market (handle race conditions safely)
   const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "pari", timestamp, event.block.number);
 
-  // Update market volume and TVL
+  // Update market TVL only (NOT volume - seed liquidity is not trading volume)
   await context.db.markets.update({
     id: marketAddress,
     data: {
-      totalVolume: market.totalVolume + totalVolume,
-      currentTvl: market.currentTvl + totalVolume,
+      currentTvl: market.currentTvl + totalLiquidity,
     },
   });
 
-  // Update platform stats
+  // Update platform stats - only liquidity, NOT volume
   const stats = await getOrCreatePlatformStats(context, chain);
   await context.db.platformStats.update({
     id: chain.chainId.toString(),
     data: {
-      totalVolume: stats.totalVolume + totalVolume,
-      totalLiquidity: stats.totalLiquidity + totalVolume,
+      totalLiquidity: stats.totalLiquidity + totalLiquidity,
       lastUpdatedAt: timestamp,
     },
   });
 
-  const daily = await getOrCreateDailyStats(context, timestamp, chain);
-  await context.db.dailyStats.update({
-    id: makeId(chain.chainId, getDayTimestamp(timestamp).toString()),
-    data: {
-      volume: daily.volume + totalVolume,
-    },
-  });
-
-  console.log(`[${chain.chainName}] Seed liquidity: ${marketAddress} - ${totalVolume}`);
+  console.log(`[${chain.chainName}] Seed liquidity: ${marketAddress} - ${totalLiquidity}`);
 });
 
 /**
