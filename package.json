@@ -1,0 +1,25 @@
+{
+  "name": "anymarket-indexer",
+  "version": "1.0.0",
+  "description": "Ponder indexer for Anymarket prediction markets on Sonic Chain",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ponder dev",
+    "start": "ponder start",
+    "serve": "ponder serve",
+    "codegen": "ponder codegen"
+  },
+  "dependencies": {
+    "@ponder/core": "^0.6.0",
+    "hono": "^4.0.0",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

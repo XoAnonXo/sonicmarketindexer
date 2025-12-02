@@ -1,0 +1,50 @@
+# =============================================================================
+# Docker Compose for Local Development
+# =============================================================================
+# Usage:
+#   docker-compose up -d        # Start services
+#   docker-compose logs -f      # View logs
+#   docker-compose down         # Stop services
+#   docker-compose down -v      # Stop and remove volumes
+
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: anymarket-indexer-db
+    environment:
+      POSTGRES_USER: ponder
+      POSTGRES_PASSWORD: ponder
+      POSTGRES_DB: anymarket
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ponder -d anymarket"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Ponder Indexer
+  indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: anymarket-indexer
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PONDER_RPC_URL_146=https://rpc.soniclabs.com
+      - DATABASE_URL=postgresql://ponder:ponder@postgres:5432/anymarket
+    ports:
+      - "42069:42069"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
