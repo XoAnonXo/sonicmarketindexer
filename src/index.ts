@@ -80,6 +80,17 @@ interface ChainInfo {
 }
 
 // =============================================================================
+// CONSTANTS
+// =============================================================================
+
+/**
+ * Minimum collateral amount to index a trade (in USDC with 6 decimals)
+ * Trades below this threshold are skipped to filter out dust/spam transactions.
+ * 1_000_000n = $1.00 USDC
+ */
+const MIN_TRADE_AMOUNT = 1_000_000n;
+
+// =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
 // 
@@ -1015,6 +1026,11 @@ ponder.on("PredictionAMM:BuyTokens", async ({ event, context }) => {
   const marketAddress = event.log.address;  // Dynamic contract address
   const chain = getChainInfo(context);
   
+  // Skip dust/spam transactions below minimum threshold ($1 USDC)
+  if (collateralAmount < MIN_TRADE_AMOUNT) {
+    return;
+  }
+  
   // Generate unique trade ID: chainId-txHash-logIndex
   const tradeId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
 
@@ -1149,6 +1165,12 @@ ponder.on("PredictionAMM:SellTokens", async ({ event, context }) => {
   const timestamp = event.block.timestamp;
   const marketAddress = event.log.address;
   const chain = getChainInfo(context);
+  
+  // Skip dust/spam transactions below minimum threshold ($1 USDC)
+  if (collateralAmount < MIN_TRADE_AMOUNT) {
+    return;
+  }
+  
   const tradeId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1682,6 +1704,12 @@ ponder.on("PredictionPariMutuel:PositionPurchased", async ({ event, context }) =
   const timestamp = event.block.timestamp;
   const marketAddress = event.log.address;
   const chain = getChainInfo(context);
+  
+  // Skip dust/spam transactions below minimum threshold ($1 USDC)
+  if (collateralIn < MIN_TRADE_AMOUNT) {
+    return;
+  }
+  
   const tradeId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
 
   // Get or create market (handle race conditions safely)
