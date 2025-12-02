@@ -127,6 +127,18 @@ Verifies:
 - PariMutuel `PositionPurchased` event counts match
 - Trade amounts and volumes
 
+### Traders (`verify-traders.ts`)
+Compares unique trader counts with on-chain events.
+
+```bash
+npx tsx verify-traders.ts
+```
+
+Verifies:
+- Per-market unique trader counts match on-chain unique addresses
+- Global unique traders from all events
+- Users table consistency with trades
+
 ## Output
 
 The scripts produce colored terminal output with:
