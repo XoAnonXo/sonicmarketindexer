@@ -151,6 +151,20 @@ Verifies:
 - Counts of active vs resolved markets
 - Platform stats match market counts
 
+### Winners (`verify-winners.ts`)
+Compares biggest winners and winnings claims with on-chain WinningsRedeemed events.
+
+```bash
+npx tsx verify-winners.ts
+```
+
+Verifies:
+- Top winners by total winnings claimed
+- Biggest single claim amounts
+- Trading profit (buy/sell difference)
+- Per-market winnings match on-chain events
+- Platform totalWinningsPaid matches sum of claims
+
 ## Output
 
 The scripts produce colored terminal output with:
