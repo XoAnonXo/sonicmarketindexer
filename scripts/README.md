@@ -139,6 +139,18 @@ Verifies:
 - Global unique traders from all events
 - Users table consistency with trades
 
+### Active Markets (`verify-active-markets.ts`)
+Compares market status (active vs resolved) with on-chain poll status.
+
+```bash
+npx tsx verify-active-markets.ts
+```
+
+Verifies:
+- Poll status matches on-chain `getStatus()` (0=PENDING, 1=YES, 2=NO, 3=UNKNOWN)
+- Counts of active vs resolved markets
+- Platform stats match market counts
+
 ## Output
 
 The scripts produce colored terminal output with:
