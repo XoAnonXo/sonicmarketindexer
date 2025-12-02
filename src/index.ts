@@ -446,7 +446,7 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
 
 /**
  * Handle BuyTokens event from PredictionAMM
- * FIX: Only update volume stats if market exists to maintain consistency
+ * NOTE: Always update both market AND platform stats together for consistency
  */
 ponder.on("PredictionAMM:BuyTokens", async ({ event, context }) => {
   const { trader, isYes, tokenAmount, collateralAmount, fee } = event.args;
@@ -455,10 +455,31 @@ ponder.on("PredictionAMM:BuyTokens", async ({ event, context }) => {
   const chain = getChainInfo(context);
   const tradeId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
 
-  const market = await context.db.markets.findUnique({ id: marketAddress });
-  const pollAddress = market?.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
+  // Get or create market (handle race conditions)
+  let market = await context.db.markets.findUnique({ id: marketAddress });
+  if (!market) {
+    console.warn(`[${chain.chainName}] BuyTokens: Market not found ${marketAddress} - creating minimal record`);
+    market = await context.db.markets.create({
+      id: marketAddress,
+      data: {
+        chainId: chain.chainId,
+        chainName: chain.chainName,
+        pollAddress: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        creator: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        marketType: "amm",
+        collateralToken: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        totalVolume: 0n,
+        totalTrades: 0,
+        currentTvl: 0n,
+        uniqueTraders: 0,
+        createdAtBlock: event.block.number,
+        createdAt: timestamp,
+      },
+    });
+  }
+  const pollAddress = market.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
 
-  // Always create trade record
+  // Create trade record
   await context.db.trades.create({
     id: tradeId,
     data: {
@@ -478,7 +499,7 @@ ponder.on("PredictionAMM:BuyTokens", async ({ event, context }) => {
     },
   });
 
-  // Always update user stats
+  // Update user stats
   const user = await getOrCreateUser(context, trader, chain);
   const isNewUser = user.totalTrades === 0;
   
@@ -493,12 +514,6 @@ ponder.on("PredictionAMM:BuyTokens", async ({ event, context }) => {
     },
   });
 
-  // FIX: Only update volume stats if market exists
-  if (!market) {
-    console.warn(`[${chain.chainName}] BuyTokens: Market not found ${marketAddress} - skipping volume stats update`);
-    return;
-  }
-
   // Update market stats
   await context.db.markets.update({
     id: marketAddress,
@@ -508,7 +523,7 @@ ponder.on("PredictionAMM:BuyTokens", async ({ event, context }) => {
     },
   });
 
-  // Update platform stats (now guaranteed to be in sync with market)
+  // Update platform stats
   const stats = await getOrCreatePlatformStats(context, chain);
   await context.db.platformStats.update({
     id: chain.chainId.toString(),
@@ -543,7 +558,7 @@ ponder.on("PredictionAMM:BuyTokens", async ({ event, context }) => {
 
 /**
  * Handle SellTokens event from PredictionAMM
- * FIX: Only update volume stats if market exists to maintain consistency
+ * NOTE: Always update both market AND platform stats together for consistency
  */
 ponder.on("PredictionAMM:SellTokens", async ({ event, context }) => {
   const { trader, isYes, tokenAmount, collateralAmount, fee } = event.args;
@@ -552,10 +567,31 @@ ponder.on("PredictionAMM:SellTokens", async ({ event, context }) => {
   const chain = getChainInfo(context);
   const tradeId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
 
-  const market = await context.db.markets.findUnique({ id: marketAddress });
-  const pollAddress = market?.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
+  // Get or create market (handle race conditions)
+  let market = await context.db.markets.findUnique({ id: marketAddress });
+  if (!market) {
+    console.warn(`[${chain.chainName}] SellTokens: Market not found ${marketAddress} - creating minimal record`);
+    market = await context.db.markets.create({
+      id: marketAddress,
+      data: {
+        chainId: chain.chainId,
+        chainName: chain.chainName,
+        pollAddress: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        creator: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        marketType: "amm",
+        collateralToken: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        totalVolume: 0n,
+        totalTrades: 0,
+        currentTvl: 0n,
+        uniqueTraders: 0,
+        createdAtBlock: event.block.number,
+        createdAt: timestamp,
+      },
+    });
+  }
+  const pollAddress = market.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
 
-  // Always create trade record
+  // Create trade record
   await context.db.trades.create({
     id: tradeId,
     data: {
@@ -575,7 +611,7 @@ ponder.on("PredictionAMM:SellTokens", async ({ event, context }) => {
     },
   });
 
-  // Always update user stats
+  // Update user stats
   const user = await getOrCreateUser(context, trader, chain);
   await context.db.users.update({
     id: makeId(chain.chainId, trader.toLowerCase()),
@@ -586,12 +622,6 @@ ponder.on("PredictionAMM:SellTokens", async ({ event, context }) => {
     },
   });
 
-  // FIX: Only update volume stats if market exists
-  if (!market) {
-    console.warn(`[${chain.chainName}] SellTokens: Market not found ${marketAddress} - skipping volume stats update`);
-    return;
-  }
-
   // Update market stats
   await context.db.markets.update({
     id: marketAddress,
@@ -601,7 +631,7 @@ ponder.on("PredictionAMM:SellTokens", async ({ event, context }) => {
     },
   });
 
-  // Update platform stats (now guaranteed to be in sync with market)
+  // Update platform stats
   const stats = await getOrCreatePlatformStats(context, chain);
   await context.db.platformStats.update({
     id: chain.chainId.toString(),
@@ -758,7 +788,7 @@ ponder.on("PredictionAMM:WinningsRedeemed", async ({ event, context }) => {
 /**
  * Handle LiquidityAdded event from PredictionAMM
  * IMPORTANT: First liquidity add has IMBALANCE that counts as volume!
- * FIX: Only update volume/liquidity in platform stats if market exists
+ * NOTE: Always update both market AND platform stats together for consistency
  */
 ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
   const { provider, collateralAmount, lpTokens, amounts } = event.args;
@@ -769,7 +799,7 @@ ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
 
   const imbalanceVolume = (amounts.yesToReturn ?? 0n) + (amounts.noToReturn ?? 0n);
 
-  // Always create liquidity event record
+  // Create liquidity event record
   await context.db.liquidityEvents.create({
     id: eventId,
     data: {
@@ -785,12 +815,27 @@ ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
     },
   });
 
-  const market = await context.db.markets.findUnique({ id: marketAddress });
-  
-  // FIX: Only update volume/TVL if market exists - prevents platform vs market discrepancy
+  // Get or create market (handle race conditions)
+  let market = await context.db.markets.findUnique({ id: marketAddress });
   if (!market) {
-    console.warn(`[${chain.chainName}] LiquidityAdded: Market not found ${marketAddress} - skipping volume/TVL update`);
-    return;
+    console.warn(`[${chain.chainName}] LiquidityAdded: Market not found ${marketAddress} - creating minimal record`);
+    market = await context.db.markets.create({
+      id: marketAddress,
+      data: {
+        chainId: chain.chainId,
+        chainName: chain.chainName,
+        pollAddress: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        creator: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        marketType: "amm",
+        collateralToken: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        totalVolume: 0n,
+        totalTrades: 0,
+        currentTvl: 0n,
+        uniqueTraders: 0,
+        createdAtBlock: event.block.number,
+        createdAt: timestamp,
+      },
+    });
   }
 
   // Update market TVL and volume (if imbalanced)
@@ -804,7 +849,7 @@ ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
     },
   });
 
-  // Update platform stats (now guaranteed to be in sync with market)
+  // Update platform stats
   const stats = await getOrCreatePlatformStats(context, chain);
   await context.db.platformStats.update({
     id: chain.chainId.toString(),
@@ -905,7 +950,7 @@ ponder.on("PredictionAMM:Sync", async ({ event, context }) => {
 /**
  * Handle SeedInitialLiquidity event from PredictionPariMutuel
  * CRITICAL: This is VOLUME!
- * FIX: Only update platform stats if market exists to maintain consistency
+ * NOTE: Always update both market AND platform stats together for consistency
  */
 ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }) => {
   const { yesAmount, noAmount } = event.args;
@@ -915,12 +960,29 @@ ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }
 
   const totalVolume = yesAmount + noAmount;
 
-  const market = await context.db.markets.findUnique({ id: marketAddress });
+  // Try to get existing market, create minimal record if not exists (race condition handling)
+  let market = await context.db.markets.findUnique({ id: marketAddress });
   
-  // FIX: Only update volume if market exists - prevents platform vs market volume discrepancy
   if (!market) {
-    console.warn(`[${chain.chainName}] SeedInitialLiquidity: Market not found ${marketAddress} - skipping volume update`);
-    return;
+    // Market might not exist yet due to event ordering - create minimal record
+    console.warn(`[${chain.chainName}] SeedInitialLiquidity: Market not found ${marketAddress} - creating minimal record`);
+    market = await context.db.markets.create({
+      id: marketAddress,
+      data: {
+        chainId: chain.chainId,
+        chainName: chain.chainName,
+        pollAddress: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        creator: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        marketType: "pari",
+        collateralToken: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        totalVolume: 0n,
+        totalTrades: 0,
+        currentTvl: 0n,
+        uniqueTraders: 0,
+        createdAtBlock: event.block.number,
+        createdAt: timestamp,
+      },
+    });
   }
 
   // Update market volume and TVL
@@ -932,7 +994,7 @@ ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }
     },
   });
 
-  // Update platform stats (now guaranteed to be in sync with market)
+  // Update platform stats
   const stats = await getOrCreatePlatformStats(context, chain);
   await context.db.platformStats.update({
     id: chain.chainId.toString(),
@@ -959,7 +1021,7 @@ ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }
  */
 /**
  * Handle PositionPurchased event from PredictionPariMutuel
- * FIX: Only update volume stats if market exists to maintain consistency
+ * NOTE: Always update both market AND platform stats together for consistency
  */
 ponder.on("PredictionPariMutuel:PositionPurchased", async ({ event, context }) => {
   const { buyer, isYes, collateralIn, sharesOut } = event.args;
@@ -968,10 +1030,31 @@ ponder.on("PredictionPariMutuel:PositionPurchased", async ({ event, context }) =
   const chain = getChainInfo(context);
   const tradeId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
 
-  const market = await context.db.markets.findUnique({ id: marketAddress });
-  const pollAddress = market?.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
+  // Get or create market (handle race conditions)
+  let market = await context.db.markets.findUnique({ id: marketAddress });
+  if (!market) {
+    console.warn(`[${chain.chainName}] PositionPurchased: Market not found ${marketAddress} - creating minimal record`);
+    market = await context.db.markets.create({
+      id: marketAddress,
+      data: {
+        chainId: chain.chainId,
+        chainName: chain.chainName,
+        pollAddress: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        creator: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        marketType: "pari",
+        collateralToken: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        totalVolume: 0n,
+        totalTrades: 0,
+        currentTvl: 0n,
+        uniqueTraders: 0,
+        createdAtBlock: event.block.number,
+        createdAt: timestamp,
+      },
+    });
+  }
+  const pollAddress = market.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
 
-  // Always create trade record
+  // Create trade record
   await context.db.trades.create({
     id: tradeId,
     data: {
@@ -991,7 +1074,7 @@ ponder.on("PredictionPariMutuel:PositionPurchased", async ({ event, context }) =
     },
   });
 
-  // Always update user stats
+  // Update user stats
   const user = await getOrCreateUser(context, buyer, chain);
   const isNewUser = user.totalTrades === 0;
   
@@ -1006,12 +1089,6 @@ ponder.on("PredictionPariMutuel:PositionPurchased", async ({ event, context }) =
     },
   });
 
-  // FIX: Only update volume stats if market exists
-  if (!market) {
-    console.warn(`[${chain.chainName}] PositionPurchased: Market not found ${marketAddress} - skipping volume stats update`);
-    return;
-  }
-
   // Update market stats
   await context.db.markets.update({
     id: marketAddress,
@@ -1022,7 +1099,7 @@ ponder.on("PredictionPariMutuel:PositionPurchased", async ({ event, context }) =
     },
   });
 
-  // Update platform stats (now guaranteed to be in sync with market)
+  // Update platform stats
   const stats = await getOrCreatePlatformStats(context, chain);
   await context.db.platformStats.update({
     id: chain.chainId.toString(),
