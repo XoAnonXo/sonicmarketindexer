@@ -43,7 +43,7 @@
  * - To display: divide by 1,000,000 (1e6)
  * - Example: 1000000n = $1.00
  * 
- * @version 2 - Force resync after volume tracking fix (2024-12-02)
+ * @version 3 - Added createdTxHash to markets table for live activity display (2024-12-02)
  * @see https://ponder.sh/docs/schema
  */
 
@@ -143,6 +143,8 @@ export default createSchema((p) => ({
     createdAtBlock: p.bigint(),
     /** Timestamp when created */
     createdAt: p.bigint(),
+    /** Transaction hash of creation */
+    createdTxHash: p.hex(),
   }),
 
   // ===========================================================================

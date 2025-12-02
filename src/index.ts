@@ -433,7 +433,8 @@ async function getOrCreateMinimalMarket(
   chain: ChainInfo,
   marketType: "amm" | "pari",
   timestamp: bigint,
-  blockNumber: bigint
+  blockNumber: bigint,
+  txHash?: `0x${string}`
 ) {
   // Check if market already exists
   let market = await context.db.markets.findUnique({ id: marketAddress });
@@ -460,6 +461,7 @@ async function getOrCreateMinimalMarket(
           uniqueTraders: 0,
           createdAtBlock: blockNumber,
           createdAt: timestamp,
+          createdTxHash: txHash ?? "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
         },
       });
     } catch (e: any) {
@@ -761,6 +763,7 @@ ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
         // Update creation metadata
         createdAtBlock: event.block.number,
         createdAt: timestamp,
+        createdTxHash: event.transaction.hash,
       },
     });
   } else {
@@ -787,6 +790,7 @@ ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
         reserveNo: 0n,
         createdAtBlock: event.block.number,
         createdAt: timestamp,
+        createdTxHash: event.transaction.hash,
       },
     });
   }
@@ -890,6 +894,7 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
         uniqueTraders: existingMarket.uniqueTraders,
         createdAtBlock: event.block.number,
         createdAt: timestamp,
+        createdTxHash: event.transaction.hash,
       },
     });
   } else {
@@ -912,6 +917,7 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
         uniqueTraders: 0,
         createdAtBlock: event.block.number,
         createdAt: timestamp,
+        createdTxHash: event.transaction.hash,
       },
     });
   }
@@ -1010,7 +1016,7 @@ ponder.on("PredictionAMM:BuyTokens", async ({ event, context }) => {
   // ─────────────────────────────────────────────────────────────────────────────
   // STEP 1: Ensure market record exists (handle racing with MarketCreated)
   // ─────────────────────────────────────────────────────────────────────────────
-  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "amm", timestamp, event.block.number);
+  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "amm", timestamp, event.block.number, event.transaction.hash);
   const pollAddress = market.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1143,7 +1149,7 @@ ponder.on("PredictionAMM:SellTokens", async ({ event, context }) => {
   // ─────────────────────────────────────────────────────────────────────────────
   // STEP 1: Ensure market record exists
   // ─────────────────────────────────────────────────────────────────────────────
-  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "amm", timestamp, event.block.number);
+  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "amm", timestamp, event.block.number, event.transaction.hash);
   const pollAddress = market.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1451,7 +1457,7 @@ ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
   });
 
   // Get or create market (handle race conditions safely)
-  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "amm", timestamp, event.block.number);
+  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "amm", timestamp, event.block.number, event.transaction.hash);
 
   // Update market TVL and volume (if imbalanced)
   await context.db.markets.update({
@@ -1611,7 +1617,7 @@ ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }
   // ─────────────────────────────────────────────────────────────────────────────
   // STEP 1: Ensure market record exists (may race with PariMutuelCreated)
   // ─────────────────────────────────────────────────────────────────────────────
-  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "pari", timestamp, event.block.number);
+  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "pari", timestamp, event.block.number, event.transaction.hash);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // STEP 2: Update market with BOTH TVL and volume
@@ -1664,7 +1670,7 @@ ponder.on("PredictionPariMutuel:PositionPurchased", async ({ event, context }) =
   const tradeId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
 
   // Get or create market (handle race conditions safely)
-  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "pari", timestamp, event.block.number);
+  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "pari", timestamp, event.block.number, event.transaction.hash);
   const pollAddress = market.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
 
   // Create trade record
