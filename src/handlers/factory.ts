@@ -1,7 +1,12 @@
 import { ponder } from "@/generated";
 import { getChainInfo, makeId } from "../utils/helpers";
+import { MarketType } from "../utils/constants";
 import { updateAggregateStats } from "../services/stats";
 import { getOrCreateUser } from "../services/db";
+
+// =============================================================================
+// AMM MARKET CREATED
+// =============================================================================
 
 ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
   const { 
@@ -19,22 +24,29 @@ ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
 
   const existingMarket = await context.db.markets.findUnique({ id: marketAddress });
   
+  const marketData = {
+    chainId: chain.chainId,
+    chainName: chain.chainName,
+    pollAddress,
+    creator: creator.toLowerCase() as `0x${string}`,
+    marketType: MarketType.AMM,
+    isIncomplete: false,
+    collateralToken: collateral,
+    yesToken,
+    noToken,
+    feeTier: Number(feeTier),
+    maxPriceImbalancePerHour: Number(maxPriceImbalancePerHour),
+    createdAtBlock: event.block.number,
+    createdAt: timestamp,
+    createdTxHash: event.transaction.hash,
+  };
+
   if (existingMarket) {
     await context.db.markets.update({
       id: marketAddress,
       data: {
-        chainId: chain.chainId,
-        chainName: chain.chainName,
-        pollAddress,
-        creator: creator.toLowerCase() as `0x${string}`,
-        marketType: "amm",
-        // Valid record now
-        isIncomplete: false,
-        collateralToken: collateral,
-        yesToken,
-        noToken,
-        feeTier: Number(feeTier),
-        maxPriceImbalancePerHour: Number(maxPriceImbalancePerHour),
+        ...marketData,
+        // Preserve existing stats
         totalVolume: existingMarket.totalVolume,
         totalTrades: existingMarket.totalTrades,
         currentTvl: existingMarket.currentTvl,
@@ -42,26 +54,13 @@ ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
         initialLiquidity: existingMarket.initialLiquidity ?? 0n,
         reserveYes: existingMarket.reserveYes ?? 0n,
         reserveNo: existingMarket.reserveNo ?? 0n,
-        createdAtBlock: event.block.number,
-        createdAt: timestamp,
-        createdTxHash: event.transaction.hash,
       },
     });
   } else {
     await context.db.markets.create({
       id: marketAddress,
       data: {
-        chainId: chain.chainId,
-        chainName: chain.chainName,
-        pollAddress,
-        creator: creator.toLowerCase() as `0x${string}`,
-        marketType: "amm",
-        isIncomplete: false,
-        collateralToken: collateral,
-        yesToken,
-        noToken,
-        feeTier: Number(feeTier),
-        maxPriceImbalancePerHour: Number(maxPriceImbalancePerHour),
+        ...marketData,
         totalVolume: 0n,
         totalTrades: 0,
         currentTvl: 0n,
@@ -69,9 +68,6 @@ ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
         initialLiquidity: 0n,
         reserveYes: 0n,
         reserveNo: 0n,
-        createdAtBlock: event.block.number,
-        createdAt: timestamp,
-        createdTxHash: event.transaction.hash,
       },
     });
   }
@@ -84,14 +80,17 @@ ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
     },
   });
 
-  // Use centralized stats update
   await updateAggregateStats(context, chain, timestamp, {
     markets: 1,
-    ammMarkets: 1
+    ammMarkets: 1,
   });
 
   console.log(`[${chain.chainName}] AMM market created: ${marketAddress}`);
 });
+
+// =============================================================================
+// PARIMUTUEL MARKET CREATED
+// =============================================================================
 
 ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
   const { 
@@ -107,51 +106,44 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
 
   const existingMarket = await context.db.markets.findUnique({ id: marketAddress });
   
+  const marketData = {
+    chainId: chain.chainId,
+    chainName: chain.chainName,
+    pollAddress,
+    creator: creator.toLowerCase() as `0x${string}`,
+    marketType: MarketType.PARI,
+    isIncomplete: false,
+    collateralToken: collateral,
+    curveFlattener: Number(curveFlattener),
+    curveOffset: Number(curveOffset),
+    createdAtBlock: event.block.number,
+    createdAt: timestamp,
+    createdTxHash: event.transaction.hash,
+  };
+
   if (existingMarket) {
     await context.db.markets.update({
       id: marketAddress,
       data: {
-        chainId: chain.chainId,
-        chainName: chain.chainName,
-        pollAddress,
-        creator: creator.toLowerCase() as `0x${string}`,
-        marketType: "pari",
-        // Valid record now
-        isIncomplete: false,
-        collateralToken: collateral,
-        curveFlattener: Number(curveFlattener),
-        curveOffset: Number(curveOffset),
+        ...marketData,
+        // Preserve existing stats
         totalVolume: existingMarket.totalVolume,
         totalTrades: existingMarket.totalTrades,
         currentTvl: existingMarket.currentTvl,
         uniqueTraders: existingMarket.uniqueTraders,
         initialLiquidity: existingMarket.initialLiquidity ?? 0n,
-        createdAtBlock: event.block.number,
-        createdAt: timestamp,
-        createdTxHash: event.transaction.hash,
       },
     });
   } else {
     await context.db.markets.create({
       id: marketAddress,
       data: {
-        chainId: chain.chainId,
-        chainName: chain.chainName,
-        pollAddress,
-        creator: creator.toLowerCase() as `0x${string}`,
-        marketType: "pari",
-        isIncomplete: false,
-        collateralToken: collateral,
-        curveFlattener: Number(curveFlattener),
-        curveOffset: Number(curveOffset),
+        ...marketData,
         totalVolume: 0n,
         totalTrades: 0,
         currentTvl: 0n,
         uniqueTraders: 0,
         initialLiquidity: 0n,
-        createdAtBlock: event.block.number,
-        createdAt: timestamp,
-        createdTxHash: event.transaction.hash,
       },
     });
   }
@@ -164,14 +156,10 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
     },
   });
 
-  // Use centralized stats update
   await updateAggregateStats(context, chain, timestamp, {
     markets: 1,
-    pariMarkets: 1
+    pariMarkets: 1,
   });
 
   console.log(`[${chain.chainName}] PariMutuel market created: ${marketAddress}`);
 });
-
-
-

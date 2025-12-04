@@ -524,4 +524,76 @@ export default createSchema((p) => ({
     /** Unique traders that hour */
     uniqueTraders: p.int(),
   }),
+
+  // ===========================================================================
+  // DAILY ACTIVE USERS TABLE
+  // ===========================================================================
+  /**
+   * Tracks unique active users per day for accurate daily stats.
+   * Used to properly count activeUsers in dailyStats without double-counting.
+   * 
+   * ID FORMAT: chainId-dayTimestamp-userAddress
+   */
+  dailyActiveUsers: p.createTable({
+    /** Composite ID: chainId-dayTimestamp-userAddress */
+    id: p.string(),
+    /** Chain ID */
+    chainId: p.int(),
+    /** Day timestamp (midnight UTC) */
+    dayTimestamp: p.bigint(),
+    /** User address */
+    user: p.hex(),
+    /** First activity timestamp of the day */
+    firstActivityAt: p.bigint(),
+    /** Number of trades made that day */
+    tradesCount: p.int(),
+  }),
+
+  // ===========================================================================
+  // USER MARKET POSITIONS TABLE
+  // ===========================================================================
+  /**
+   * Tracks user positions in each market for win/loss determination.
+   * When a poll resolves, we can iterate positions to determine winners and losers.
+   * 
+   * ID FORMAT: chainId-marketAddress-userAddress
+   * 
+   * POSITION TRACKING:
+   * - yesAmount: Total collateral bet on YES
+   * - noAmount: Total collateral bet on NO
+   * - netPosition: yesAmount - noAmount (positive = net YES, negative = net NO)
+   * 
+   * RESOLUTION:
+   * - When poll resolves YES (status=1): users with yesAmount > 0 win, noAmount > 0 lose
+   * - When poll resolves NO (status=2): users with noAmount > 0 win, yesAmount > 0 lose
+   * - When poll resolves UNKNOWN (status=3): all positions refunded (neither win nor loss)
+   */
+  userMarketPositions: p.createTable({
+    /** Composite ID: chainId-marketAddress-userAddress */
+    id: p.string(),
+    /** Chain ID */
+    chainId: p.int(),
+    /** Market address */
+    marketAddress: p.hex(),
+    /** Poll address (for resolution lookups) */
+    pollAddress: p.hex(),
+    /** User address */
+    user: p.hex(),
+    /** Total collateral deposited betting YES (6 decimals) */
+    yesAmount: p.bigint(),
+    /** Total collateral deposited betting NO (6 decimals) */
+    noAmount: p.bigint(),
+    /** YES tokens held (for AMM - token amounts) */
+    yesTokens: p.bigint(),
+    /** NO tokens held (for AMM - token amounts) */
+    noTokens: p.bigint(),
+    /** Whether user has redeemed winnings for this market */
+    hasRedeemed: p.boolean(),
+    /** Whether loss has been recorded for this position */
+    lossRecorded: p.boolean(),
+    /** First position timestamp */
+    firstPositionAt: p.bigint(),
+    /** Last position update timestamp */
+    lastUpdatedAt: p.bigint(),
+  }),
 }));

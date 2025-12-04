@@ -183,4 +183,48 @@ export const PredictionPariMutuelAbi = [
     outputs: [{ name: "", type: "address" }],
     stateMutability: "view",
   },
+  
+  /**
+   * creator() - Returns the market creator address
+   */
+  {
+    type: "function",
+    name: "creator",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * collateralToken() - Returns the collateral token address (USDC)
+   */
+  {
+    type: "function",
+    name: "collateralToken",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * curveFlattener() - Returns the curve flattener parameter
+   */
+  {
+    type: "function",
+    name: "curveFlattener",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * curveOffset() - Returns the curve offset parameter
+   */
+  {
+    type: "function",
+    name: "curveOffset",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
 ] as const;

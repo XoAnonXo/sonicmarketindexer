@@ -1,14 +1,13 @@
 import { getChainName } from "../../config";
+import type { PonderContext, ChainInfo } from "./types";
 
-export interface ChainInfo {
-  chainId: number;
-  chainName: string;
-}
+// Re-export ChainInfo for backward compatibility
+export type { ChainInfo } from "./types";
 
 /**
  * Extract chain information from Ponder event context.
  */
-export function getChainInfo(context: any): ChainInfo {
+export function getChainInfo(context: PonderContext): ChainInfo {
   const chainId = context.network.chainId;
   const chainName = getChainName(chainId);
   return { chainId, chainName };
@@ -36,6 +35,3 @@ export function getHourTimestamp(timestamp: bigint): bigint {
   const hour = Number(timestamp) - (Number(timestamp) % 3600);
   return BigInt(hour);
 }
-
-
-

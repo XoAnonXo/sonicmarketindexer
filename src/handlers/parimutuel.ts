@@ -1,8 +1,35 @@
 import { ponder } from "@/generated";
 import { getChainInfo, makeId } from "../utils/helpers";
-import { MIN_TRADE_AMOUNT } from "../utils/constants";
-import { updateAggregateStats } from "../services/stats";
-import { getOrCreateUser, getOrCreateMinimalMarket, isNewTraderForMarket, recordMarketInteraction } from "../services/db";
+import { 
+  MIN_TRADE_AMOUNT, 
+  TradeType, 
+  TradeSide,
+  MarketType,
+  ZERO_ADDRESS,
+} from "../utils/constants";
+import { updateAggregateStats, recordDailyActiveUser } from "../services/stats";
+import { getOrCreateUser, getOrCreateMinimalMarket } from "../services/db";
+import { handleBuyTrade, handleWinningsRedeemed } from "../services/trades";
+import { recordPosition } from "../services/positions";
+
+// =============================================================================
+// PNL CALCULATION HELPER
+// =============================================================================
+
+/**
+ * Calculate realized PnL for a user.
+ */
+function calculateRealizedPnL(
+  totalWithdrawn: bigint,
+  totalWinnings: bigint,
+  totalDeposited: bigint
+): bigint {
+  return totalWithdrawn + totalWinnings - totalDeposited;
+}
+
+// =============================================================================
+// SEED INITIAL LIQUIDITY
+// =============================================================================
 
 ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }) => {
   const { yesAmount, noAmount } = event.args;
@@ -12,24 +39,27 @@ ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }
 
   const totalLiquidity = yesAmount + noAmount;
 
-  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "pari", timestamp, event.block.number, event.transaction.hash);
-  const pollAddress = market.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
+  const market = await getOrCreateMinimalMarket(
+    context, marketAddress, chain, MarketType.PARI, timestamp, event.block.number, event.transaction.hash
+  );
+  const pollAddress = market.pollAddress ?? ZERO_ADDRESS;
+  const normalizedCreator = market.creator.toLowerCase() as `0x${string}`;
 
   const tradeId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
-  // Creator gets both YES and NO shares, effectively betting on both
-  // We record it as a special "seed" trade
+  
+  // Record seed as a special trade type
   await context.db.trades.create({
     id: tradeId,
     data: {
       chainId: chain.chainId,
       chainName: chain.chainName,
-      trader: market.creator, // Creator is the trader here
+      trader: normalizedCreator,
       marketAddress,
       pollAddress,
-      tradeType: "seed",
-      side: "both", // Special side for seeding
+      tradeType: TradeType.SEED,
+      side: TradeSide.BOTH,
       collateralAmount: totalLiquidity,
-      tokenAmount: 0n, // Shares calculation is complex for seed, leaving 0 for now
+      tokenAmount: 0n,
       feeAmount: 0n,
       txHash: event.transaction.hash,
       blockNumber: event.block.number,
@@ -37,11 +67,40 @@ ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }
     },
   });
 
+  // Record positions for seed (creator gets both YES and NO positions)
+  if (yesAmount > 0n) {
+    await recordPosition(
+      context, chain, marketAddress, pollAddress,
+      normalizedCreator, TradeSide.YES, yesAmount, 0n, timestamp
+    );
+  }
+  if (noAmount > 0n) {
+    await recordPosition(
+      context, chain, marketAddress, pollAddress,
+      normalizedCreator, TradeSide.NO, noAmount, 0n, timestamp
+    );
+  }
+
   const user = await getOrCreateUser(context, market.creator, chain);
+  
+  // Track daily active user
+  const isFirstActivityToday = await recordDailyActiveUser(
+    context, chain, normalizedCreator, timestamp
+  );
+
+  // Calculate new PnL after deposit
+  const newTotalDeposited = user.totalDeposited + totalLiquidity;
+  const newRealizedPnL = calculateRealizedPnL(
+    user.totalWithdrawn ?? 0n,
+    user.totalWinnings ?? 0n,
+    newTotalDeposited
+  );
+
   await context.db.users.update({
-    id: makeId(chain.chainId, market.creator.toLowerCase()),
+    id: makeId(chain.chainId, normalizedCreator),
     data: {
-      totalDeposited: user.totalDeposited + totalLiquidity,
+      totalDeposited: newTotalDeposited,
+      realizedPnL: newRealizedPnL,
       lastTradeAt: timestamp,
     },
   });
@@ -55,153 +114,63 @@ ponder.on("PredictionPariMutuel:SeedInitialLiquidity", async ({ event, context }
     },
   });
 
-  // Use centralized stats update
   await updateAggregateStats(context, chain, timestamp, {
     tvlChange: totalLiquidity,
-    volume: totalLiquidity
+    volume: totalLiquidity,
+    activeUsers: isFirstActivityToday ? 1 : 0,
   });
 
   console.log(`[${chain.chainName}] Seed liquidity (volume): ${marketAddress} - ${totalLiquidity}`);
 });
 
+// =============================================================================
+// POSITION PURCHASED (Bet)
+// =============================================================================
+
 ponder.on("PredictionPariMutuel:PositionPurchased", async ({ event, context }) => {
   const { buyer, isYes, collateralIn, sharesOut } = event.args;
-  const timestamp = event.block.timestamp;
-  const marketAddress = event.log.address;
-  const chain = getChainInfo(context);
   
   if (collateralIn < MIN_TRADE_AMOUNT) return;
   
-  const tradeId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
+  const chain = getChainInfo(context);
 
-  const market = await getOrCreateMinimalMarket(context, marketAddress, chain, "pari", timestamp, event.block.number, event.transaction.hash);
-  const pollAddress = market.pollAddress ?? ("0x" + "0".repeat(40)) as `0x${string}`;
-
-  await context.db.trades.create({
-    id: tradeId,
-    data: {
-      chainId: chain.chainId,
-      chainName: chain.chainName,
-      trader: buyer.toLowerCase() as `0x${string}`,
-      marketAddress,
-      pollAddress,
-      tradeType: "bet",
-      side: isYes ? "yes" : "no",
-      collateralAmount: collateralIn,
-      tokenAmount: sharesOut,
-      feeAmount: 0n,
-      txHash: event.transaction.hash,
-      blockNumber: event.block.number,
-      timestamp,
-    },
-  });
-
-  const user = await getOrCreateUser(context, buyer, chain);
-  const isNewUser = user.totalTrades === 0;
-  const isNewTrader = await isNewTraderForMarket(context, marketAddress, buyer, chain);
-  
-  await recordMarketInteraction(context, marketAddress, buyer, chain, timestamp);
-  
-  await context.db.users.update({
-    id: makeId(chain.chainId, buyer.toLowerCase()),
-    data: {
-      totalTrades: user.totalTrades + 1,
-      totalVolume: user.totalVolume + collateralIn,
-      totalDeposited: user.totalDeposited + collateralIn,
-      firstTradeAt: user.firstTradeAt ?? timestamp,
-      lastTradeAt: timestamp,
-    },
-  });
-
-  await context.db.markets.update({
-    id: marketAddress,
-    data: {
-      totalVolume: market.totalVolume + collateralIn,
-      totalTrades: market.totalTrades + 1,
-      currentTvl: market.currentTvl + collateralIn,
-      uniqueTraders: isNewTrader ? market.uniqueTraders + 1 : market.uniqueTraders,
-    },
-  });
-
-  // Use centralized stats update
-  await updateAggregateStats(context, chain, timestamp, {
-    trades: 1,
-    volume: collateralIn,
-    tvlChange: collateralIn,
-    users: isNewUser ? 1 : 0,
-    activeUsers: 1,
+  await handleBuyTrade({
+    context,
+    chain,
+    trader: buyer,
+    marketAddress: event.log.address,
+    timestamp: event.block.timestamp,
+    blockNumber: event.block.number,
+    txHash: event.transaction.hash,
+    logIndex: event.log.logIndex,
+    tradeType: TradeType.BET,
+    marketType: MarketType.PARI,
+    side: isYes ? TradeSide.YES : TradeSide.NO,
+    collateralAmount: collateralIn,
+    tokenAmount: sharesOut,
+    feeAmount: 0n,
   });
 });
+
+// =============================================================================
+// WINNINGS REDEEMED
+// =============================================================================
 
 ponder.on("PredictionPariMutuel:WinningsRedeemed", async ({ event, context }) => {
   const { user, collateralAmount, outcome, fee } = event.args;
-  const timestamp = event.block.timestamp;
-  const marketAddress = event.log.address;
   const chain = getChainInfo(context);
-  const winningId = makeId(chain.chainId, event.transaction.hash, event.log.logIndex);
 
-  const market = await context.db.markets.findUnique({ id: marketAddress });
-  const poll = market?.pollAddress 
-    ? await context.db.polls.findUnique({ id: market.pollAddress })
-    : null;
-
-  await context.db.winnings.create({
-    id: winningId,
-    data: {
-      chainId: chain.chainId,
-      chainName: chain.chainName,
-      user: user.toLowerCase() as `0x${string}`,
-      marketAddress,
-      collateralAmount,
-      feeAmount: fee,
-      marketQuestion: poll?.question,
-      marketType: "pari",
-      outcome: Number(outcome),
-      txHash: event.transaction.hash,
-      timestamp,
-    },
-  });
-
-  if (market) {
-    const newMarketTvl = market.currentTvl > collateralAmount 
-      ? market.currentTvl - collateralAmount 
-      : 0n;
-    await context.db.markets.update({
-      id: marketAddress,
-      data: {
-        currentTvl: newMarketTvl,
-      },
-    });
-  }
-
-  const userData = await getOrCreateUser(context, user, chain);
-  const isWin = outcome !== 3;
-  const newStreak = isWin 
-    ? (userData.currentStreak >= 0 ? userData.currentStreak + 1 : 1)
-    : (userData.currentStreak <= 0 ? userData.currentStreak - 1 : -1);
-  const bestStreak = Math.max(userData.bestStreak, newStreak > 0 ? newStreak : 0);
-  
-  const newTotalWinnings = (userData.totalWinnings ?? 0n) + collateralAmount;
-  const newRealizedPnL = (userData.totalWithdrawn ?? 0n) + newTotalWinnings - (userData.totalDeposited ?? 0n);
-  
-  await context.db.users.update({
-    id: makeId(chain.chainId, user.toLowerCase()),
-    data: {
-      totalWinnings: newTotalWinnings,
-      totalWins: isWin ? userData.totalWins + 1 : userData.totalWins,
-      currentStreak: newStreak,
-      bestStreak,
-      realizedPnL: newRealizedPnL,
-    },
-  });
-
-  // Use centralized stats update
-  await updateAggregateStats(context, chain, timestamp, {
-    winningsPaid: collateralAmount,
-    tvlChange: -collateralAmount,
-    fees: fee
+  await handleWinningsRedeemed({
+    context,
+    chain,
+    user,
+    marketAddress: event.log.address,
+    collateralAmount,
+    feeAmount: fee,
+    marketType: MarketType.PARI,
+    outcome: Number(outcome),
+    timestamp: event.block.timestamp,
+    txHash: event.transaction.hash,
+    logIndex: event.log.logIndex,
   });
 });
-
-
-
