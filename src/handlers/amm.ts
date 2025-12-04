@@ -247,7 +247,7 @@ ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
   });
 
   await updateAggregateStats(context, chain, timestamp, {
-    trades: 1,
+    // NOTE: Liquidity events are NOT trades - don't increment trade count
     tvlChange: collateralAmount,
     volume: imbalanceVolume > 0n ? imbalanceVolume : 0n,
     users: isNewUser ? 1 : 0,
@@ -338,7 +338,7 @@ ponder.on("PredictionAMM:LiquidityRemoved", async ({ event, context }) => {
   }
 
   await updateAggregateStats(context, chain, timestamp, {
-    trades: 1,
+    // NOTE: Liquidity events are NOT trades - don't increment trade count
     tvlChange: -actualTvlDecrease,
     activeUsers: isFirstActivityToday ? 1 : 0,
     hourlyUniqueTraders: isFirstActivityThisHour ? 1 : 0,

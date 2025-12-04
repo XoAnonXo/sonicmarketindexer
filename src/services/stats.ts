@@ -113,28 +113,26 @@ export async function recordHourlyActiveUser(
   const id = makeId(chain.chainId, `hour-${hourTs.toString()}`, normalizedUser);
 
   return withRetry(async () => {
-    try {
-      // Try to create - if this succeeds, it's the first activity this hour
-      await context.db.dailyActiveUsers.create({
-        id,
-        data: {
-          chainId: chain.chainId,
-          dayTimestamp: hourTs, // Reusing field for hour timestamp
-          user: normalizedUser,
-          firstActivityAt: timestamp,
-          tradesCount: 1,
-        },
-      });
-      return true; // First activity this hour
-    } catch (error: unknown) {
-      // Check if it's a unique constraint violation (record already exists)
-      const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
-      if (errorMessage.includes('unique constraint') || errorMessage.includes('p2002')) {
-        return false; // Not first activity this hour
-      }
-      // Re-throw other errors
-      throw error;
-    }
+    // Check if record exists first
+    const existing = await context.db.dailyActiveUsers.findUnique({ id });
+    const isFirstActivity = !existing;
+    
+    // Use upsert to handle concurrent writes within the same Ponder batch
+    await context.db.dailyActiveUsers.upsert({
+      id,
+      create: {
+        chainId: chain.chainId,
+        dayTimestamp: hourTs, // Reusing field for hour timestamp
+        user: normalizedUser,
+        firstActivityAt: timestamp,
+        tradesCount: 1,
+      },
+      update: {
+        // No-op update - we just need to ensure the record exists
+      },
+    });
+    
+    return isFirstActivity;
   });
 }
 
@@ -142,10 +140,9 @@ export async function recordHourlyActiveUser(
  * Record a user as active for a specific day.
  * Returns true if this is the first activity for this user today.
  * 
- * Uses try-create-first pattern to avoid TOCTOU race conditions:
- * - Try to create the record
- * - If unique constraint fails, record already exists (not first activity)
- * - If create succeeds, this is the first activity today
+ * Uses findUnique + upsert pattern for Ponder compatibility:
+ * - Check if record exists first
+ * - Use upsert to handle concurrent writes within the same batch
  */
 export async function recordDailyActiveUser(
   context: PonderContext,
@@ -158,39 +155,27 @@ export async function recordDailyActiveUser(
   const id = makeId(chain.chainId, dayTs.toString(), normalizedUser);
 
   return withRetry(async () => {
-    try {
-      // Try to create - if this succeeds, it's the first activity today
-      await context.db.dailyActiveUsers.create({
-        id,
-        data: {
-          chainId: chain.chainId,
-          dayTimestamp: dayTs,
-          user: normalizedUser,
-          firstActivityAt: timestamp,
-          tradesCount: 1,
-        },
-      });
-      return true; // First activity today
-    } catch (error: unknown) {
-      // Check if it's a unique constraint violation (record already exists)
-      const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
-      if (errorMessage.includes('unique constraint') || errorMessage.includes('p2002')) {
-        // Already active today - we need to increment trade count
-        // Use findUnique + update since we need the current count
-        const existing = await context.db.dailyActiveUsers.findUnique({ id });
-        if (existing) {
-          await context.db.dailyActiveUsers.update({
-            id,
-            data: {
-              tradesCount: existing.tradesCount + 1,
-            },
-          });
-        }
-        return false; // Not first activity today
-      }
-      // Re-throw other errors
-      throw error;
-    }
+    // Check if record exists first
+    const existing = await context.db.dailyActiveUsers.findUnique({ id });
+    const isFirstActivity = !existing;
+    
+    // Use upsert to handle concurrent writes within the same Ponder batch
+    await context.db.dailyActiveUsers.upsert({
+      id,
+      create: {
+        chainId: chain.chainId,
+        dayTimestamp: dayTs,
+        user: normalizedUser,
+        firstActivityAt: timestamp,
+        tradesCount: 1,
+      },
+      update: {
+        // Increment trade count for returning users
+        tradesCount: (existing?.tradesCount ?? 0) + 1,
+      },
+    });
+    
+    return isFirstActivity;
   });
 }
 

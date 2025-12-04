@@ -61,10 +61,9 @@ export async function getOrCreateUser(context: PonderContext, address: `0x${stri
  * Check if a trader is new to a specific market and record interaction atomically.
  * Returns true if this is the first interaction for this user on this market.
  * 
- * Uses try-create-first pattern to avoid TOCTOU race conditions:
- * - Try to create the record
- * - If unique constraint fails, record already exists (not new)
- * - If create succeeds, this is a new trader
+ * Uses findUnique + upsert pattern for Ponder compatibility:
+ * - Check if record exists first
+ * - Use upsert to handle concurrent writes within the same batch
  */
 export async function checkAndRecordMarketInteraction(
   context: PonderContext,
@@ -76,34 +75,25 @@ export async function checkAndRecordMarketInteraction(
   const id = makeId(chain.chainId, marketAddress, traderAddress);
   
   return withRetry(async () => {
-    try {
-      // Try to create - if this succeeds, it's a new trader
-      await context.db.marketUsers.create({
-        id,
-        data: {
-          chainId: chain.chainId,
-          marketAddress,
-          user: traderAddress,
-          lastTradeAt: timestamp,
-        },
-      });
-      return true; // New trader
-    } catch (error: unknown) {
-      // Check if it's a unique constraint violation (record already exists)
-      const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
-      if (errorMessage.includes('unique constraint') || errorMessage.includes('p2002')) {
-        // Record exists - update timestamp and return false
-        await context.db.marketUsers.update({
-          id,
-          data: {
-            lastTradeAt: timestamp,
-          },
-        });
-        return false; // Existing trader
-      }
-      // Re-throw other errors
-      throw error;
-    }
+    // Check if record exists first
+    const existing = await context.db.marketUsers.findUnique({ id });
+    const isNew = !existing;
+    
+    // Use upsert to handle concurrent writes within the same Ponder batch
+    await context.db.marketUsers.upsert({
+      id,
+      create: {
+        chainId: chain.chainId,
+        marketAddress,
+        user: traderAddress,
+        lastTradeAt: timestamp,
+      },
+      update: {
+        lastTradeAt: timestamp,
+      },
+    });
+    
+    return isNew;
   });
 }
 
