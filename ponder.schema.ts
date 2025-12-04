@@ -110,6 +110,8 @@ export default createSchema((p) => ({
     chainName: p.string(),
     /** Linked poll address */
     pollAddress: p.hex(),
+    /** Flag to indicate if market was created via Factory event (false) or just minimal trade record (true) */
+    isIncomplete: p.boolean(),
     /** Market creator address */
     creator: p.hex(),
     /** Market type: 'amm' or 'pari' */
@@ -290,6 +292,26 @@ export default createSchema((p) => ({
     firstTradeAt: p.bigint().optional(),
     /** Unix timestamp of user's most recent trade (null if never traded) */
     lastTradeAt: p.bigint().optional(),
+  }),
+
+  // ===========================================================================
+  // MARKET USERS TABLE
+  // ===========================================================================
+  /**
+   * Tracks unique users per market to optimize "unique traders" counting.
+   * Replaces expensive scans of the trades table.
+   */
+  marketUsers: p.createTable({
+    /** Composite ID: chainId-marketAddress-userAddress */
+    id: p.string(),
+    /** Chain ID */
+    chainId: p.int(),
+    /** Market address */
+    marketAddress: p.hex(),
+    /** User address */
+    user: p.hex(),
+    /** Timestamp of last trade on this market */
+    lastTradeAt: p.bigint(),
   }),
 
   // ===========================================================================

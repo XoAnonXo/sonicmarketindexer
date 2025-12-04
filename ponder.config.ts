@@ -70,6 +70,8 @@ export default createConfig({
       ),
       // Poll every 1 second for faster updates
       pollingInterval: 1_000,
+      // Process blocks in bulk for faster historical sync
+      maxBlockRange: 10_000,
     },
     
     // Add more networks here when deploying to other chains:
