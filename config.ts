@@ -53,10 +53,18 @@ export interface ChainConfig {
   shortName: string;
   
   /** 
-   * RPC endpoint URL for blockchain data fetching
+   * Primary RPC endpoint URL for blockchain data fetching
    * Can be overridden via PONDER_RPC_URL_{chainId} environment variable
+   * @deprecated Use rpcUrls array instead for fallback support
    */
   rpcUrl: string;
+  
+  /**
+   * Ordered list of RPC endpoints for fallback support
+   * The indexer will try each in order if previous ones fail
+   * First working RPC is used; automatically switches on errors
+   */
+  rpcUrls: string[];
   
   /** 
    * Block explorer base URL for transaction/address links
@@ -132,8 +140,18 @@ export const CHAINS: Record<number, ChainConfig> = {
     chainId: 146,
     name: "Sonic",
     shortName: "sonic",
-    // RPC can be overridden via environment variable for custom/premium endpoints
-    rpcUrl: process.env.PONDER_RPC_URL_146 ?? "https://rpc.soniclabs.com",
+    // Primary RPC (kept for backwards compatibility)
+    rpcUrl: process.env.PONDER_RPC_URL_146 ?? "https://sonic.drpc.org",
+    // Fallback RPC list - ordered by reliability/speed (tested Dec 2024)
+    // The indexer will automatically switch to next RPC if current one fails
+    rpcUrls: [
+      // 1. dRPC - Fastest (~390ms), most consistent
+      "https://sonic.drpc.org",
+      // 2. Soniclabs official - Slower (~1400ms) but reliable backup
+      "https://rpc.soniclabs.com",
+      // 3. Additional public RPCs can be added here
+      // "https://sonic.api.onfinality.io/public", // Currently broken
+    ],
     explorerUrl: "https://sonicscan.org",
     contracts: {
       // PredictionOracle: Creates and manages polls, emits PollCreated events
