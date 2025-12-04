@@ -27,10 +27,13 @@ export const CHAINS: Record<number, ChainConfig> = {
     chainId: 146,
     name: "Sonic",
     shortName: "sonic",
-    rpcUrl: "https://sonic.drpc.org",
+    rpcUrl: "https://rpc.soniclabs.com",
     rpcUrls: [
-      "https://sonic.drpc.org",
-      "https://rpc.soniclabs.com",
+      // Ordered by reliability score (green first)
+      "https://rpc.soniclabs.com",           // 0.146s - Official, green score
+      "https://sonic.api.pocket.network",    // 0.154s - green score
+      "https://sonic-rpc.publicnode.com",    // 0.383s - green score (slower but stable)
+      "https://sonic.drpc.org",              // 0.155s - yellow score (rate limits)
     ],
     explorerUrl: "https://sonicscan.org",
     contracts: {
