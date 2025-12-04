@@ -2,8 +2,6 @@ import type { PonderContext, ChainInfo } from "../utils/types";
 import { makeId } from "../utils/helpers";
 import { withRetry } from "../utils/errors";
 import { ZERO_TX_HASH, MarketType, type MarketTypeValue } from "../utils/constants";
-import { PredictionAMMAbi } from "../../abis/PredictionAMM";
-import { PredictionPariMutuelAbi } from "../../abis/PredictionPariMutuel";
 
 // =============================================================================
 // USER MANAGEMENT
@@ -98,107 +96,20 @@ export async function checkAndRecordMarketInteraction(
 }
 
 // =============================================================================
-// MARKET BACKFILL - RPC HELPERS
+// MARKET PLACEHOLDER
 // =============================================================================
+// Note: RPC backfill removed to speed up historical sync.
+// Markets are created as placeholders and updated when factory events are processed.
 
 /**
- * Fetch AMM market data from chain using parallel RPC calls.
- */
-async function fetchAmmMarketData(
-  context: PonderContext,
-  marketAddress: `0x${string}`
-) {
-  // Note: feeTier and maxPriceImbalancePerHour are NOT exposed as public view functions
-  // on the contract. They are only available in the MarketCreated event.
-  // We only fetch the data that IS available via RPC.
-  const [pollAddress, creator, collateralToken, yesToken, noToken] = 
-    await Promise.all([
-      context.client.readContract({ 
-        address: marketAddress, 
-        abi: PredictionAMMAbi, 
-        functionName: "pollAddress" 
-      }),
-      context.client.readContract({ 
-        address: marketAddress, 
-        abi: PredictionAMMAbi, 
-        functionName: "creator" 
-      }),
-      context.client.readContract({ 
-        address: marketAddress, 
-        abi: PredictionAMMAbi, 
-        functionName: "collateralToken" 
-      }),
-      context.client.readContract({ 
-        address: marketAddress, 
-        abi: PredictionAMMAbi, 
-        functionName: "yesToken" 
-      }),
-      context.client.readContract({ 
-        address: marketAddress, 
-        abi: PredictionAMMAbi, 
-        functionName: "noToken" 
-      }),
-    ]);
-
-  return {
-    pollAddress,
-    creator,
-    collateralToken,
-    yesToken,
-    noToken,
-  };
-}
-
-/**
- * Fetch PariMutuel market data from chain using parallel RPC calls.
- */
-async function fetchPariMarketData(
-  context: PonderContext,
-  marketAddress: `0x${string}`
-) {
-  const [pollAddress, creator, collateralToken, curveFlattener, curveOffset] = 
-    await Promise.all([
-      context.client.readContract({ 
-        address: marketAddress, 
-        abi: PredictionPariMutuelAbi, 
-        functionName: "pollAddress" 
-      }),
-      context.client.readContract({ 
-        address: marketAddress, 
-        abi: PredictionPariMutuelAbi, 
-        functionName: "creator" 
-      }),
-      context.client.readContract({ 
-        address: marketAddress, 
-        abi: PredictionPariMutuelAbi, 
-        functionName: "collateralToken" 
-      }),
-      context.client.readContract({ 
-        address: marketAddress, 
-        abi: PredictionPariMutuelAbi, 
-        functionName: "curveFlattener" 
-      }),
-      context.client.readContract({ 
-        address: marketAddress, 
-        abi: PredictionPariMutuelAbi, 
-        functionName: "curveOffset" 
-      }),
-    ]);
-
-  return {
-    pollAddress,
-    creator,
-    collateralToken,
-    curveFlattener: Number(curveFlattener),
-    curveOffset: Number(curveOffset),
-  };
-}
-
-/**
- * Safely get or create a minimal market record with race condition handling.
- * If market doesn't exist, fetches data on-chain to avoid placeholder/fake addresses.
+ * Safely get or create a minimal market record.
  * 
- * RPC calls are parallelized for ~7x faster backfill performance.
+ * Creates a placeholder market that will be fully populated when the MarketCreated
+ * event is processed. This avoids RPC calls during historical sync which can cause
+ * rate limiting and memory issues.
+ * 
+ * The placeholder uses the market address as pollAddress temporarily - it will be
+ * corrected when the factory event is processed.
  */
 export async function getOrCreateMinimalMarket(
   context: PonderContext, 
@@ -214,78 +125,60 @@ export async function getOrCreateMinimalMarket(
     let market = await context.db.markets.findUnique({ id: marketAddress });
     
     if (!market) {
-      // Fetch real data from chain using parallel RPC calls
-      console.log(`[${chain.chainName}] Fetching on-chain data for missing market ${marketAddress}...`);
+      // Create placeholder - will be updated when MarketCreated event is processed
+      // This avoids expensive RPC calls during historical sync
+      console.log(`[${chain.chainName}] Creating placeholder market ${marketAddress} (will be updated by factory event)`);
       
-      try {
-        if (marketType === MarketType.AMM) {
-          const ammData = await fetchAmmMarketData(context, marketAddress);
-          
-          // Note: feeTier and maxPriceImbalancePerHour are only in the MarketCreated event,
-          // not available via RPC. Mark as incomplete so we know to update when we see the event.
-          // Validate required fields exist
-          if (!ammData.yesToken || !ammData.noToken) {
-            throw new Error(`AMM market ${marketAddress} missing yesToken or noToken`);
-          }
-          
-          market = await context.db.markets.create({
-            id: marketAddress,
-            data: {
-              chainId: chain.chainId,
-              chainName: chain.chainName,
-              isIncomplete: true, // Will be updated when MarketCreated event is processed
-              pollAddress: ammData.pollAddress.toLowerCase() as `0x${string}`,
-              creator: ammData.creator.toLowerCase() as `0x${string}`,
-              marketType: MarketType.AMM,
-              collateralToken: ammData.collateralToken.toLowerCase() as `0x${string}`,
-              yesToken: ammData.yesToken.toLowerCase() as `0x${string}`,
-              noToken: ammData.noToken.toLowerCase() as `0x${string}`,
-              feeTier: 0, // Default - will be set from MarketCreated event
-              maxPriceImbalancePerHour: 0, // Default - will be set from MarketCreated event
-              // Stats start at zero
-              totalVolume: 0n,
-              totalTrades: 0,
-              currentTvl: 0n,
-              uniqueTraders: 0,
-              initialLiquidity: 0n,
-              createdAtBlock: blockNumber,
-              createdAt: timestamp,
-              createdTxHash: txHash ?? ZERO_TX_HASH,
-            },
-          });
-        } else {
-          const pariData = await fetchPariMarketData(context, marketAddress);
-          
-          market = await context.db.markets.create({
-            id: marketAddress,
-            data: {
-              chainId: chain.chainId,
-              chainName: chain.chainName,
-              isIncomplete: false,
-              pollAddress: pariData.pollAddress.toLowerCase() as `0x${string}`,
-              creator: pariData.creator.toLowerCase() as `0x${string}`,
-              marketType: MarketType.PARI,
-              collateralToken: pariData.collateralToken.toLowerCase() as `0x${string}`,
-              curveFlattener: pariData.curveFlattener,
-              curveOffset: pariData.curveOffset,
-              // Stats start at zero
-              totalVolume: 0n,
-              totalTrades: 0,
-              currentTvl: 0n,
-              uniqueTraders: 0,
-              initialLiquidity: 0n,
-              createdAtBlock: blockNumber,
-              createdAt: timestamp,
-              createdTxHash: txHash ?? ZERO_TX_HASH,
-            },
-          });
-        }
-        
-        console.log(`[${chain.chainName}] Successfully backfilled market ${marketAddress} from on-chain data.`);
-      } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        console.error(`Failed to fetch market data for ${marketAddress}: ${errorMessage}`);
-        throw err;
+      const placeholderAddress = marketAddress; // Use market address as temp pollAddress
+      
+      if (marketType === MarketType.AMM) {
+        market = await context.db.markets.create({
+          id: marketAddress,
+          data: {
+            chainId: chain.chainId,
+            chainName: chain.chainName,
+            isIncomplete: true, // Will be updated when MarketCreated event is processed
+            pollAddress: placeholderAddress,
+            creator: placeholderAddress, // Placeholder
+            marketType: MarketType.AMM,
+            collateralToken: placeholderAddress, // Placeholder
+            yesToken: placeholderAddress, // Placeholder
+            noToken: placeholderAddress, // Placeholder
+            feeTier: 0,
+            maxPriceImbalancePerHour: 0,
+            totalVolume: 0n,
+            totalTrades: 0,
+            currentTvl: 0n,
+            uniqueTraders: 0,
+            initialLiquidity: 0n,
+            createdAtBlock: blockNumber,
+            createdAt: timestamp,
+            createdTxHash: txHash ?? ZERO_TX_HASH,
+          },
+        });
+      } else {
+        market = await context.db.markets.create({
+          id: marketAddress,
+          data: {
+            chainId: chain.chainId,
+            chainName: chain.chainName,
+            isIncomplete: true, // Will be updated when PariMutuelCreated event is processed
+            pollAddress: placeholderAddress,
+            creator: placeholderAddress, // Placeholder
+            marketType: MarketType.PARI,
+            collateralToken: placeholderAddress, // Placeholder
+            curveFlattener: 0,
+            curveOffset: 0,
+            totalVolume: 0n,
+            totalTrades: 0,
+            currentTvl: 0n,
+            uniqueTraders: 0,
+            initialLiquidity: 0n,
+            createdAtBlock: blockNumber,
+            createdAt: timestamp,
+            createdTxHash: txHash ?? ZERO_TX_HASH,
+          },
+        });
       }
     }
     
