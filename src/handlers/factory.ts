@@ -1,6 +1,6 @@
 import { ponder } from "@/generated";
 import { getChainInfo, makeId } from "../utils/helpers";
-import { MarketType } from "../utils/constants";
+import { MarketType, ZERO_ADDRESS } from "../utils/constants";
 import { updateAggregateStats } from "../services/stats";
 import { getOrCreateUser } from "../services/db";
 
@@ -71,6 +71,37 @@ ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
       },
     });
   }
+
+  const normalizedPollAddress = pollAddress.toLowerCase() as `0x${string}`;
+
+  // Fix orphaned records from race conditions
+  // (when trade/liquidity events are indexed before MarketCreated in same block)
+  await Promise.all([
+    context.db.trades.updateMany({
+      where: { marketAddress, pollAddress: ZERO_ADDRESS },
+      data: { pollAddress: normalizedPollAddress },
+    }),
+    context.db.trades.updateMany({
+      where: { marketAddress, pollAddress: marketAddress },
+      data: { pollAddress: normalizedPollAddress },
+    }),
+    context.db.liquidityEvents.updateMany({
+      where: { marketAddress, pollAddress: ZERO_ADDRESS },
+      data: { pollAddress: normalizedPollAddress },
+    }),
+    context.db.liquidityEvents.updateMany({
+      where: { marketAddress, pollAddress: marketAddress },
+      data: { pollAddress: normalizedPollAddress },
+    }),
+    context.db.userMarketPositions.updateMany({
+      where: { marketAddress, pollAddress: ZERO_ADDRESS },
+      data: { pollAddress: normalizedPollAddress },
+    }),
+    context.db.userMarketPositions.updateMany({
+      where: { marketAddress, pollAddress: marketAddress },
+      data: { pollAddress: normalizedPollAddress },
+    }),
+  ]);
 
   const user = await getOrCreateUser(context, creator, chain);
   await context.db.users.update({
@@ -147,6 +178,29 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
       },
     });
   }
+
+  const normalizedPollAddress = pollAddress.toLowerCase() as `0x${string}`;
+
+  // Fix orphaned records from race conditions
+  // (when trade/liquidity events are indexed before PariMutuelCreated in same block)
+  await Promise.all([
+    context.db.trades.updateMany({
+      where: { marketAddress, pollAddress: ZERO_ADDRESS },
+      data: { pollAddress: normalizedPollAddress },
+    }),
+    context.db.trades.updateMany({
+      where: { marketAddress, pollAddress: marketAddress },
+      data: { pollAddress: normalizedPollAddress },
+    }),
+    context.db.userMarketPositions.updateMany({
+      where: { marketAddress, pollAddress: ZERO_ADDRESS },
+      data: { pollAddress: normalizedPollAddress },
+    }),
+    context.db.userMarketPositions.updateMany({
+      where: { marketAddress, pollAddress: marketAddress },
+      data: { pollAddress: normalizedPollAddress },
+    }),
+  ]);
 
   const user = await getOrCreateUser(context, creator, chain);
   await context.db.users.update({
