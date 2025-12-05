@@ -41,7 +41,7 @@ export const CHAINS: Record<number, ChainConfig> = {
       marketFactory: "0x017277d36f80422a5d0aA5B8C93f5ae57BA2A317",
       usdc: "0xc6020e5492c2892fD63489797ce3d431ae101d5e",
     },
-    startBlock: 56_000_000,
+    startBlock: 55_820_000, // First Oracle event at block 55,820,252 (was 56,000,000 - missing early polls!)
     enabled: true,
   },
 };

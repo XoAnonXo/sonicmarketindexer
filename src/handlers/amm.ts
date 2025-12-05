@@ -9,6 +9,7 @@ import {
   LiquidityEventType,
   ZERO_ADDRESS,
 } from "../utils/constants";
+import type { MarketTypeValue } from "../utils/constants";
 import { updateAggregateStats, recordDailyActiveUser, recordHourlyActiveUser } from "../services/stats";
 import { getOrCreateUser, getOrCreateMinimalMarket, checkAndRecordMarketInteraction } from "../services/db";
 import { handleBuyTrade, handleSellTrade, handleSwapTrade, handleWinningsRedeemed } from "../services/trades";
@@ -349,18 +350,52 @@ ponder.on("PredictionAMM:LiquidityRemoved", async ({ event, context }) => {
 // SYNC (Reserve Updates)
 // =============================================================================
 
+/**
+ * Calculate yesChance for AMM markets from reserves.
+ * For constant product AMM: yesChance = reserveNo / (reserveYes + reserveNo)
+ * Higher NO reserves = higher YES probability (price mechanics)
+ * 
+ * @param reserveYes - YES token reserves
+ * @param reserveNo - NO token reserves
+ * @returns yesChance scaled by 1e9 (e.g., 500_000_000 = 50%)
+ */
+function calculateAmmYesChance(reserveYes: bigint, reserveNo: bigint): bigint {
+  const totalReserves = reserveYes + reserveNo;
+  if (totalReserves === 0n) {
+    return 500_000_000n; // 50% when no reserves
+  }
+  // yesChance = reserveNo / totalReserves * 1e9
+  return (reserveNo * 1_000_000_000n) / totalReserves;
+}
+
 ponder.on("PredictionAMM:Sync", async ({ event, context }) => {
   const { rYes, rNo } = event.args;
   const marketAddress = event.log.address;
+  const chain = getChainInfo(context);
+  const timestamp = event.block.timestamp;
 
-  const market = await context.db.markets.findUnique({ id: marketAddress });
-  if (market) {
-    await context.db.markets.update({
-      id: marketAddress,
-      data: {
-        reserveYes: BigInt(rYes),
-        reserveNo: BigInt(rNo),
-      },
-    });
-  }
+  // CRITICAL FIX: Use getOrCreateMinimalMarket to ensure market exists
+  // This prevents "zombie markets" where Sync fires before MarketCreated
+  const market = await getOrCreateMinimalMarket(
+    context, 
+    marketAddress, 
+    chain, 
+    MarketType.AMM, 
+    timestamp, 
+    event.block.number, 
+    event.transaction.hash
+  );
+
+  const reserveYes = BigInt(rYes);
+  const reserveNo = BigInt(rNo);
+  const yesChance = calculateAmmYesChance(reserveYes, reserveNo);
+
+  await context.db.markets.update({
+    id: marketAddress,
+    data: {
+      reserveYes,
+      reserveNo,
+      yesChance, // Now AMM markets also have yesChance calculated!
+    },
+  });
 });
