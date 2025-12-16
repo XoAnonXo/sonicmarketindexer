@@ -43,7 +43,7 @@ export async function updateReferralVolume(
   const normalizedTrader = traderAddress.toLowerCase() as `0x${string}`;
   
   // Query the ReferralRegistry contract to get the trader's referrer
-  let referrer: `0x${string}`;
+  let referrer: `0x${string}` | null = null;
   try {
     referrer = await context.client.readContract({
       address: REFERRAL_REGISTRY_ADDRESS,
@@ -51,9 +51,18 @@ export async function updateReferralVolume(
       functionName: "getReferrer",
       args: [traderAddress],
     });
-  } catch (error) {
-    // If the contract call fails, assume no referrer
-    console.warn(`Failed to get referrer for ${normalizedTrader}: ${error}`);
+  } catch (error: any) {
+    // Expected: Contract returns no data for users without referrers
+    // Only log if it's an unexpected error (not "returned no data" or "execution reverted")
+    const errorMsg = String(error?.message || error);
+    const isExpectedError = 
+      errorMsg.includes("returned no data") || 
+      errorMsg.includes("execution reverted") ||
+      errorMsg.includes("0x");
+    
+    if (!isExpectedError) {
+      console.warn(`[Referral] Unexpected error getting referrer for ${normalizedTrader.slice(0, 10)}...: ${errorMsg.slice(0, 100)}`);
+    }
     return;
   }
   
