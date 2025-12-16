@@ -3,10 +3,6 @@ import { getChainInfo, makeId } from "../utils/helpers";
 import { updateAggregateStats } from "../services/stats";
 import { getOrCreateUser } from "../services/db";
 
-// =============================================================================
-// POLL CREATED
-// =============================================================================
-
 ponder.on("PredictionOracle:PollCreated", async ({ event, context }) => {
   const { pollAddress, creator, deadlineEpoch, question } = event.args;
   const timestamp = event.block.timestamp;
@@ -40,16 +36,13 @@ ponder.on("PredictionOracle:PollCreated", async ({ event, context }) => {
     },
   });
 
+  // Use centralized stats update
   await updateAggregateStats(context, chain, timestamp, {
-    polls: 1,
+    polls: 1
   });
 
   console.log(`[${chain.chainName}] Poll created: ${pollAddress}`);
 });
-
-// =============================================================================
-// POLL REFRESHED
-// =============================================================================
 
 ponder.on("PredictionOracle:PollRefreshed", async ({ event, context }) => {
   const { pollAddress, newCheckEpoch } = event.args;
@@ -64,3 +57,8 @@ ponder.on("PredictionOracle:PollRefreshed", async ({ event, context }) => {
     });
   }
 });
+
+
+
+
+

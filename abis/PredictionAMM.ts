@@ -321,18 +321,18 @@ export const PredictionAMMAbi = [
   },
   
   /**
-   * collateralToken() - Returns the collateral token address (USDC)
+   * collateral() - Returns the collateral token address (USDC)
    */
   {
     inputs: [],
-    name: "collateralToken",
+    name: "collateral",
     outputs: [{ type: "address" }],
     stateMutability: "view",
     type: "function",
   },
   
   /**
-   * yesToken() - Returns the YES outcome token address
+   * yesToken() - Returns the YES token address
    */
   {
     inputs: [],
@@ -343,7 +343,7 @@ export const PredictionAMMAbi = [
   },
   
   /**
-   * noToken() - Returns the NO outcome token address
+   * noToken() - Returns the NO token address
    */
   {
     inputs: [],
@@ -354,23 +354,23 @@ export const PredictionAMMAbi = [
   },
   
   /**
-   * feeTier() - Returns the fee tier for this market
+   * feeTier() - Returns the trading fee tier
    */
   {
     inputs: [],
     name: "feeTier",
-    outputs: [{ type: "uint24" }],
+    outputs: [{ type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
   
   /**
-   * maxPriceImbalancePerHour() - Returns max price change per hour
+   * maxPriceImbalancePerHour() - Returns max price imbalance setting
    */
   {
     inputs: [],
     name: "maxPriceImbalancePerHour",
-    outputs: [{ type: "uint24" }],
+    outputs: [{ type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
