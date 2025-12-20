@@ -8,18 +8,6 @@ ponder.on("PredictionOracle:PollCreated", async ({ event, context }) => {
 	const timestamp = event.block.timestamp;
 	const chain = getChainInfo(context);
 
-	let category = 0;
-	try {
-		const categoryResult = await context.client.readContract({
-			address: pollAddress,
-			abi: context.contracts.PredictionPoll.abi,
-			functionName: "category",
-		});
-		category = Number(categoryResult);
-	} catch {
-		// Silently use default - contract may not have category() function
-	}
-
 	await context.db.polls.create({
 		id: pollAddress,
 		data: {
@@ -32,7 +20,7 @@ ponder.on("PredictionOracle:PollCreated", async ({ event, context }) => {
 			deadlineEpoch: Number(deadlineEpoch),
 			finalizationEpoch: 0,
 			checkEpoch: 0,
-			category: category,
+			category: 0,
 			status: 0,
 			createdAtBlock: event.block.number,
 			createdAt: timestamp,
