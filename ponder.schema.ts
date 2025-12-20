@@ -79,12 +79,26 @@ export default createSchema((p) => ({
     finalizationEpoch: p.int(),
     /** Check epoch for operators */
     checkEpoch: p.int(),
+    /** Whether the last refresh was free */
+    lastRefreshWasFree: p.boolean().optional(),
     /** Poll category (0-11) */
     category: p.int(),
     /** Poll status: 0=Pending, 1=Yes, 2=No, 3=Unknown */
     status: p.int(),
     /** Resolution reason (if resolved) */
     resolutionReason: p.string().optional(),
+    /** Setter address (operator who set the answer, null if pending) */
+    setter: p.hex().optional(),
+    /** Whether arbitration has been started for this poll */
+    isDisputed: p.boolean().optional(),
+    /** Address that started arbitration (if disputed) */
+    disputedBy: p.hex().optional(),
+    /** Reason for the dispute */
+    disputeReason: p.string().optional(),
+    /** Stake amount for the dispute */
+    disputeStake: p.bigint().optional(),
+    /** Timestamp when arbitration was started */
+    disputedAt: p.bigint().optional(),
     /** Timestamp when resolved (null if pending) */
     resolvedAt: p.bigint().optional(),
     /** Block number when created */
@@ -201,6 +215,8 @@ export default createSchema((p) => ({
     tokenAmount: p.bigint().optional(),
     /** Fee paid */
     feeAmount: p.bigint(),
+    /** Output token amount (for swaps) */
+    tokenAmountOut: p.bigint().optional(),
     /** Transaction hash */
     txHash: p.hex(),
     /** Block number */
@@ -372,6 +388,10 @@ export default createSchema((p) => ({
     collateralAmount: p.bigint(),
     /** Fee deducted */
     feeAmount: p.bigint(),
+    /** YES tokens burned (AMM only) */
+    yesTokenAmount: p.bigint().optional(),
+    /** NO tokens burned (AMM only) */
+    noTokenAmount: p.bigint().optional(),
     /** Market question (denormalized for display) */
     marketQuestion: p.string().optional(),
     /** Market type: 'amm' or 'pari' */
@@ -409,6 +429,14 @@ export default createSchema((p) => ({
     collateralAmount: p.bigint(),
     /** LP tokens minted/burned */
     lpTokens: p.bigint(),
+    /** YES tokens added/removed */
+    yesTokenAmount: p.bigint().optional(),
+    /** NO tokens added/removed */
+    noTokenAmount: p.bigint().optional(),
+    /** YES tokens returned to user (from imbalance) */
+    yesTokensReturned: p.bigint().optional(),
+    /** NO tokens returned to user (from imbalance) */
+    noTokensReturned: p.bigint().optional(),
     /** Transaction hash */
     txHash: p.hex(),
     /** Timestamp */

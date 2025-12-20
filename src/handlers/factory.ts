@@ -126,6 +126,10 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
         currentTvl: existingMarket.currentTvl,
         uniqueTraders: existingMarket.uniqueTraders,
         initialLiquidity: existingMarket.initialLiquidity ?? 0n,
+        // Preserve existing PariMutuel pool state if already set
+        totalCollateralYes: existingMarket.totalCollateralYes ?? 0n,
+        totalCollateralNo: existingMarket.totalCollateralNo ?? 0n,
+        yesChance: existingMarket.yesChance ?? 500_000_000n, // Default 50%
         createdAtBlock: event.block.number,
         createdAt: timestamp,
         createdTxHash: event.transaction.hash,
@@ -149,6 +153,10 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
         currentTvl: 0n,
         uniqueTraders: 0,
         initialLiquidity: 0n,
+        // Initialize PariMutuel pool state
+        totalCollateralYes: 0n,
+        totalCollateralNo: 0n,
+        yesChance: 500_000_000n, // Default 50% before seeding
         createdAtBlock: event.block.number,
         createdAt: timestamp,
         createdTxHash: event.transaction.hash,

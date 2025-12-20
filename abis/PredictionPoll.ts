@@ -88,5 +88,121 @@ export const PredictionPollAbi = [
       { name: "stake", type: "uint256", indexed: false },
     ],
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VIEW FUNCTIONS
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  /**
+   * question() - Returns the poll's prediction question
+   */
+  {
+    type: "function",
+    name: "question",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * rules() - Returns the poll's resolution rules
+   */
+  {
+    type: "function",
+    name: "rules",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * sources() - Returns array of source URLs for verification
+   */
+  {
+    type: "function",
+    name: "sources",
+    inputs: [],
+    outputs: [{ name: "", type: "string[]" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * deadlineEpoch() - Returns the deadline timestamp for betting
+   */
+  {
+    type: "function",
+    name: "deadlineEpoch",
+    inputs: [],
+    outputs: [{ name: "", type: "uint32" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * finalizationEpoch() - Returns when the poll can be finalized
+   */
+  {
+    type: "function",
+    name: "finalizationEpoch",
+    inputs: [],
+    outputs: [{ name: "", type: "uint32" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * checkEpoch() - Returns when operators should check for resolution
+   */
+  {
+    type: "function",
+    name: "checkEpoch",
+    inputs: [],
+    outputs: [{ name: "", type: "uint32" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * category() - Returns the poll category (0-11)
+   * Categories: Politics, Sports, Crypto, etc.
+   */
+  {
+    type: "function",
+    name: "category",
+    inputs: [],
+    outputs: [{ name: "", type: "uint8" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * status() - Returns the poll status
+   * 0=Pending, 1=Yes, 2=No, 3=Unknown
+   */
+  {
+    type: "function",
+    name: "status",
+    inputs: [],
+    outputs: [{ name: "", type: "uint8" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * resolutionReason() - Returns the resolution explanation
+   */
+  {
+    type: "function",
+    name: "resolutionReason",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+    stateMutability: "view",
+  },
+  
+  /**
+   * creator() - Returns the poll creator address
+   */
+  {
+    type: "function",
+    name: "creator",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
 ] as const;
 

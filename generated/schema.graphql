@@ -45,9 +45,16 @@ type polls {
   deadlineEpoch: Int!
   finalizationEpoch: Int!
   checkEpoch: Int!
+  lastRefreshWasFree: Boolean
   category: Int!
   status: Int!
   resolutionReason: String
+  setter: String
+  isDisputed: Boolean
+  disputedBy: String
+  disputeReason: String
+  disputeStake: BigInt
+  disputedAt: BigInt
   resolvedAt: BigInt
   createdAtBlock: BigInt!
   createdAt: BigInt!
@@ -159,6 +166,10 @@ input pollsFilter {
   checkEpoch_lt: Int
   checkEpoch_gte: Int
   checkEpoch_lte: Int
+  lastRefreshWasFree: Boolean
+  lastRefreshWasFree_not: Boolean
+  lastRefreshWasFree_in: [Boolean]
+  lastRefreshWasFree_not_in: [Boolean]
   category: Int
   category_not: Int
   category_in: [Int]
@@ -185,6 +196,52 @@ input pollsFilter {
   resolutionReason_ends_with: String
   resolutionReason_not_starts_with: String
   resolutionReason_not_ends_with: String
+  setter: String
+  setter_not: String
+  setter_in: [String]
+  setter_not_in: [String]
+  setter_gt: String
+  setter_lt: String
+  setter_gte: String
+  setter_lte: String
+  isDisputed: Boolean
+  isDisputed_not: Boolean
+  isDisputed_in: [Boolean]
+  isDisputed_not_in: [Boolean]
+  disputedBy: String
+  disputedBy_not: String
+  disputedBy_in: [String]
+  disputedBy_not_in: [String]
+  disputedBy_gt: String
+  disputedBy_lt: String
+  disputedBy_gte: String
+  disputedBy_lte: String
+  disputeReason: String
+  disputeReason_not: String
+  disputeReason_in: [String]
+  disputeReason_not_in: [String]
+  disputeReason_contains: String
+  disputeReason_not_contains: String
+  disputeReason_starts_with: String
+  disputeReason_ends_with: String
+  disputeReason_not_starts_with: String
+  disputeReason_not_ends_with: String
+  disputeStake: BigInt
+  disputeStake_not: BigInt
+  disputeStake_in: [BigInt]
+  disputeStake_not_in: [BigInt]
+  disputeStake_gt: BigInt
+  disputeStake_lt: BigInt
+  disputeStake_gte: BigInt
+  disputeStake_lte: BigInt
+  disputedAt: BigInt
+  disputedAt_not: BigInt
+  disputedAt_in: [BigInt]
+  disputedAt_not_in: [BigInt]
+  disputedAt_gt: BigInt
+  disputedAt_lt: BigInt
+  disputedAt_gte: BigInt
+  disputedAt_lte: BigInt
   resolvedAt: BigInt
   resolvedAt_not: BigInt
   resolvedAt_in: [BigInt]
@@ -241,6 +298,11 @@ type markets {
   initialLiquidity: BigInt!
   reserveYes: BigInt
   reserveNo: BigInt
+  totalCollateralYes: BigInt
+  totalCollateralNo: BigInt
+  totalSharesYes: BigInt
+  totalSharesNo: BigInt
+  yesChance: BigInt
   createdAtBlock: BigInt!
   createdAt: BigInt!
   createdTxHash: String!
@@ -422,6 +484,46 @@ input marketsFilter {
   reserveNo_lt: BigInt
   reserveNo_gte: BigInt
   reserveNo_lte: BigInt
+  totalCollateralYes: BigInt
+  totalCollateralYes_not: BigInt
+  totalCollateralYes_in: [BigInt]
+  totalCollateralYes_not_in: [BigInt]
+  totalCollateralYes_gt: BigInt
+  totalCollateralYes_lt: BigInt
+  totalCollateralYes_gte: BigInt
+  totalCollateralYes_lte: BigInt
+  totalCollateralNo: BigInt
+  totalCollateralNo_not: BigInt
+  totalCollateralNo_in: [BigInt]
+  totalCollateralNo_not_in: [BigInt]
+  totalCollateralNo_gt: BigInt
+  totalCollateralNo_lt: BigInt
+  totalCollateralNo_gte: BigInt
+  totalCollateralNo_lte: BigInt
+  totalSharesYes: BigInt
+  totalSharesYes_not: BigInt
+  totalSharesYes_in: [BigInt]
+  totalSharesYes_not_in: [BigInt]
+  totalSharesYes_gt: BigInt
+  totalSharesYes_lt: BigInt
+  totalSharesYes_gte: BigInt
+  totalSharesYes_lte: BigInt
+  totalSharesNo: BigInt
+  totalSharesNo_not: BigInt
+  totalSharesNo_in: [BigInt]
+  totalSharesNo_not_in: [BigInt]
+  totalSharesNo_gt: BigInt
+  totalSharesNo_lt: BigInt
+  totalSharesNo_gte: BigInt
+  totalSharesNo_lte: BigInt
+  yesChance: BigInt
+  yesChance_not: BigInt
+  yesChance_in: [BigInt]
+  yesChance_not_in: [BigInt]
+  yesChance_gt: BigInt
+  yesChance_lt: BigInt
+  yesChance_gte: BigInt
+  yesChance_lte: BigInt
   createdAtBlock: BigInt
   createdAtBlock_not: BigInt
   createdAtBlock_in: [BigInt]
@@ -460,6 +562,7 @@ type trades {
   collateralAmount: BigInt!
   tokenAmount: BigInt
   feeAmount: BigInt!
+  tokenAmountOut: BigInt
   txHash: String!
   blockNumber: BigInt!
   timestamp: BigInt!
@@ -569,6 +672,14 @@ input tradesFilter {
   feeAmount_lt: BigInt
   feeAmount_gte: BigInt
   feeAmount_lte: BigInt
+  tokenAmountOut: BigInt
+  tokenAmountOut_not: BigInt
+  tokenAmountOut_in: [BigInt]
+  tokenAmountOut_not_in: [BigInt]
+  tokenAmountOut_gt: BigInt
+  tokenAmountOut_lt: BigInt
+  tokenAmountOut_gte: BigInt
+  tokenAmountOut_lte: BigInt
   txHash: String
   txHash_not: String
   txHash_in: [String]
@@ -905,6 +1016,8 @@ type winnings {
   marketAddress: String!
   collateralAmount: BigInt!
   feeAmount: BigInt!
+  yesTokenAmount: BigInt
+  noTokenAmount: BigInt
   marketQuestion: String
   marketType: String!
   outcome: Int
@@ -980,6 +1093,22 @@ input winningsFilter {
   feeAmount_lt: BigInt
   feeAmount_gte: BigInt
   feeAmount_lte: BigInt
+  yesTokenAmount: BigInt
+  yesTokenAmount_not: BigInt
+  yesTokenAmount_in: [BigInt]
+  yesTokenAmount_not_in: [BigInt]
+  yesTokenAmount_gt: BigInt
+  yesTokenAmount_lt: BigInt
+  yesTokenAmount_gte: BigInt
+  yesTokenAmount_lte: BigInt
+  noTokenAmount: BigInt
+  noTokenAmount_not: BigInt
+  noTokenAmount_in: [BigInt]
+  noTokenAmount_not_in: [BigInt]
+  noTokenAmount_gt: BigInt
+  noTokenAmount_lt: BigInt
+  noTokenAmount_gte: BigInt
+  noTokenAmount_lte: BigInt
   marketQuestion: String
   marketQuestion_not: String
   marketQuestion_in: [String]
@@ -1036,6 +1165,10 @@ type liquidityEvents {
   eventType: String!
   collateralAmount: BigInt!
   lpTokens: BigInt!
+  yesTokenAmount: BigInt
+  noTokenAmount: BigInt
+  yesTokensReturned: BigInt
+  noTokensReturned: BigInt
   txHash: String!
   timestamp: BigInt!
 }
@@ -1126,6 +1259,38 @@ input liquidityEventsFilter {
   lpTokens_lt: BigInt
   lpTokens_gte: BigInt
   lpTokens_lte: BigInt
+  yesTokenAmount: BigInt
+  yesTokenAmount_not: BigInt
+  yesTokenAmount_in: [BigInt]
+  yesTokenAmount_not_in: [BigInt]
+  yesTokenAmount_gt: BigInt
+  yesTokenAmount_lt: BigInt
+  yesTokenAmount_gte: BigInt
+  yesTokenAmount_lte: BigInt
+  noTokenAmount: BigInt
+  noTokenAmount_not: BigInt
+  noTokenAmount_in: [BigInt]
+  noTokenAmount_not_in: [BigInt]
+  noTokenAmount_gt: BigInt
+  noTokenAmount_lt: BigInt
+  noTokenAmount_gte: BigInt
+  noTokenAmount_lte: BigInt
+  yesTokensReturned: BigInt
+  yesTokensReturned_not: BigInt
+  yesTokensReturned_in: [BigInt]
+  yesTokensReturned_not_in: [BigInt]
+  yesTokensReturned_gt: BigInt
+  yesTokensReturned_lt: BigInt
+  yesTokensReturned_gte: BigInt
+  yesTokensReturned_lte: BigInt
+  noTokensReturned: BigInt
+  noTokensReturned_not: BigInt
+  noTokensReturned_in: [BigInt]
+  noTokensReturned_not_in: [BigInt]
+  noTokensReturned_gt: BigInt
+  noTokensReturned_lt: BigInt
+  noTokensReturned_gte: BigInt
+  noTokensReturned_lte: BigInt
   txHash: String
   txHash_not: String
   txHash_in: [String]

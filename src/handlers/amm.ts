@@ -185,6 +185,7 @@ ponder.on("PredictionAMM:SwapTokens", async ({ event, context }) => {
       side: yesToNo ? "yes" : "no",
       collateralAmount: 0n,
       tokenAmount: amountIn,
+      tokenAmountOut: amountOut,
       feeAmount: fee,
       txHash: event.transaction.hash,
       blockNumber: event.block.number,
@@ -224,7 +225,7 @@ ponder.on("PredictionAMM:SwapTokens", async ({ event, context }) => {
 });
 
 ponder.on("PredictionAMM:WinningsRedeemed", async ({ event, context }) => {
-  const { user, collateralAmount } = event.args;
+  const { user, yesAmount, noAmount, collateralAmount } = event.args;
   const timestamp = event.block.timestamp;
   const marketAddress = event.log.address;
   const chain = getChainInfo(context);
@@ -244,6 +245,8 @@ ponder.on("PredictionAMM:WinningsRedeemed", async ({ event, context }) => {
       marketAddress,
       collateralAmount,
       feeAmount: 0n,
+      yesTokenAmount: yesAmount,
+      noTokenAmount: noAmount,
       marketQuestion: poll?.question,
       marketType: "amm",
       txHash: event.transaction.hash,
@@ -313,6 +316,10 @@ ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
       eventType: "add",
       collateralAmount,
       lpTokens,
+      yesTokenAmount: amounts.yesToAdd ?? 0n,
+      noTokenAmount: amounts.noToAdd ?? 0n,
+      yesTokensReturned: amounts.yesToReturn ?? 0n,
+      noTokensReturned: amounts.noToReturn ?? 0n,
       txHash: event.transaction.hash,
       timestamp,
     },
@@ -384,7 +391,7 @@ ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
 });
 
 ponder.on("PredictionAMM:LiquidityRemoved", async ({ event, context }) => {
-  const { provider, lpTokens, collateralToReturn } = event.args;
+  const { provider, lpTokens, yesAmount, noAmount, collateralToReturn } = event.args;
   const timestamp = event.block.timestamp;
   const marketAddress = event.log.address;
   const chain = getChainInfo(context);
@@ -407,6 +414,8 @@ ponder.on("PredictionAMM:LiquidityRemoved", async ({ event, context }) => {
       eventType: "remove",
       collateralAmount: collateralToReturn,
       lpTokens,
+      yesTokenAmount: yesAmount,
+      noTokenAmount: noAmount,
       txHash: event.transaction.hash,
       timestamp,
     },
