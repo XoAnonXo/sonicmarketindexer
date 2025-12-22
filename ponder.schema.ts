@@ -144,6 +144,10 @@ export default createSchema((p) => ({
     curveFlattener: p.int().optional(),
     /** Curve offset parameter (PariMutuel only) */
     curveOffset: p.int().optional(),
+    /** PariMutuel: Market start timestamp (for time-weighted odds) */
+    marketStartTimestamp: p.bigint().optional(),
+    /** PariMutuel: Market close timestamp (for time-weighted odds) */
+    marketCloseTimestamp: p.bigint().optional(),
     /** Total trading volume (6 decimals) */
     totalVolume: p.bigint(),
     /** Number of trades */

@@ -227,6 +227,30 @@ export const PredictionPariMutuelAbi = [
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
   },
+
+  /**
+   * marketStartTimestamp() - Returns when the market started
+   * Used for time-weighted odds calculation
+   */
+  {
+    type: "function",
+    name: "marketStartTimestamp",
+    inputs: [],
+    outputs: [{ name: "", type: "uint32" }],
+    stateMutability: "view",
+  },
+
+  /**
+   * marketCloseTimestamp() - Returns when the market closes
+   * Used for time-weighted odds calculation
+   */
+  {
+    type: "function",
+    name: "marketCloseTimestamp",
+    inputs: [],
+    outputs: [{ name: "", type: "uint32" }],
+    stateMutability: "view",
+  },
   
   // ═══════════════════════════════════════════════════════════════════════════
   // POOL STATE VIEW FUNCTIONS (Used for odds calculation)

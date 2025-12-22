@@ -4,6 +4,43 @@ import { MIN_TRADE_AMOUNT, MIN_TOKEN_AMOUNT } from "../utils/constants";
 import { updateAggregateStats } from "../services/stats";
 import { getOrCreateUser, getOrCreateMinimalMarket, isNewTraderForMarket, recordMarketInteraction } from "../services/db";
 import { updateReferralVolume } from "../services/referral";
+import { PredictionAMMAbi } from "../../abis/PredictionAMM";
+
+/**
+ * Helper function to read reserves from contract and update market
+ * Called after each trade event to keep reserveYes/reserveNo/yesChance in sync
+ */
+async function updateMarketReserves(
+  context: any,
+  marketAddress: `0x${string}`,
+  chainName: string
+): Promise<void> {
+  try {
+    const reserves = await context.client.readContract({
+      address: marketAddress,
+      abi: PredictionAMMAbi,
+      functionName: "getReserves",
+    });
+
+    const reserveYes = BigInt(reserves[0]);
+    const reserveNo = BigInt(reserves[1]);
+    const totalReserves = reserveYes + reserveNo;
+    const yesChance = totalReserves > 0n
+      ? (reserveNo * 1_000_000_000n) / totalReserves
+      : 500_000_000n;
+
+    await context.db.markets.update({
+      id: marketAddress,
+      data: {
+        reserveYes,
+        reserveNo,
+        yesChance,
+      },
+    });
+  } catch (err) {
+    console.warn(`[${chainName}] Failed to read reserves for ${marketAddress}:`, err);
+  }
+}
 
 ponder.on("PredictionAMM:BuyTokens", async ({ event, context }) => {
   const { trader, isYes, tokenAmount, collateralAmount, fee } = event.args;
@@ -63,6 +100,9 @@ ponder.on("PredictionAMM:BuyTokens", async ({ event, context }) => {
       uniqueTraders: isNewTrader ? market.uniqueTraders + 1 : market.uniqueTraders,
     },
   });
+
+  // Update reserves from contract
+  await updateMarketReserves(context, marketAddress, chain.chainName);
 
   // Use centralized stats update
   await updateAggregateStats(context, chain, timestamp, {
@@ -145,6 +185,9 @@ ponder.on("PredictionAMM:SellTokens", async ({ event, context }) => {
     },
   });
 
+  // Update reserves from contract
+  await updateMarketReserves(context, marketAddress, chain.chainName);
+
   // Use centralized stats update
   // TVL decreases by collateralAmount (money flowing out)
   await updateAggregateStats(context, chain, timestamp, {
@@ -214,6 +257,9 @@ ponder.on("PredictionAMM:SwapTokens", async ({ event, context }) => {
         uniqueTraders: isNewTrader ? market.uniqueTraders + 1 : market.uniqueTraders,
       },
     });
+
+    // Update reserves from contract
+    await updateMarketReserves(context, marketAddress, chain.chainName);
   }
 
   // Use centralized stats update
@@ -264,6 +310,9 @@ ponder.on("PredictionAMM:WinningsRedeemed", async ({ event, context }) => {
         currentTvl: newMarketTvl,
       },
     });
+
+    // Update reserves from contract (may be 0 after redemptions)
+    await updateMarketReserves(context, marketAddress, chain.chainName);
   }
 
   const userData = await getOrCreateUser(context, user, chain);
@@ -380,6 +429,9 @@ ponder.on("PredictionAMM:LiquidityAdded", async ({ event, context }) => {
     },
   });
 
+  // Update reserves from contract
+  await updateMarketReserves(context, marketAddress, chain.chainName);
+
   // Use centralized stats update
   // NOTE: Liquidity adds are NOT trades - they're LP actions
   await updateAggregateStats(context, chain, timestamp, {
@@ -450,6 +502,9 @@ ponder.on("PredictionAMM:LiquidityRemoved", async ({ event, context }) => {
         uniqueTraders: isNewTrader ? market.uniqueTraders + 1 : market.uniqueTraders,
       },
     });
+
+    // Update reserves from contract
+    await updateMarketReserves(context, marketAddress, chain.chainName);
   }
 
   // Use centralized stats update
@@ -460,6 +515,8 @@ ponder.on("PredictionAMM:LiquidityRemoved", async ({ event, context }) => {
   });
 });
 
+// Sync event is a fallback - only fires when sync() is called manually
+// Reserve updates are now done via contract reads in trade handlers
 ponder.on("PredictionAMM:Sync", async ({ event, context }) => {
 	const { rYes, rNo } = event.args;
 	const marketAddress = event.log.address;

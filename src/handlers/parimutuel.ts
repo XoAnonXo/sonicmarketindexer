@@ -1,5 +1,5 @@
 import { ponder } from "@/generated";
-import { getChainInfo, makeId } from "../utils/helpers";
+import { getChainInfo, makeId, calculatePariMutuelYesChance } from "../utils/helpers";
 import { MIN_TRADE_AMOUNT } from "../utils/constants";
 import { updateAggregateStats } from "../services/stats";
 import {
@@ -67,10 +67,26 @@ ponder.on(
 			},
 		});
 
-		const yesChance =
-			totalLiquidity > 0n
+		// Calculate yesChance using time-weighted curve
+		// Note: At seed time, we may not have timestamps yet if PariMutuelCreated fires after
+		// In that case, use simple collateral ratio as fallback
+		let yesChance: bigint;
+		if (market.marketStartTimestamp && market.marketCloseTimestamp && market.curveFlattener) {
+			yesChance = calculatePariMutuelYesChance({
+				curveFlattener: market.curveFlattener,
+				curveOffset: market.curveOffset ?? 0,
+				totalCollateralYes: yesAmount,
+				totalCollateralNo: noAmount,
+				currentTimestamp: timestamp,
+				marketStartTimestamp: market.marketStartTimestamp,
+				marketCloseTimestamp: market.marketCloseTimestamp,
+			});
+		} else {
+			// Fallback: simple collateral ratio
+			yesChance = totalLiquidity > 0n
 				? (noAmount * 1_000_000_000n) / totalLiquidity
-				: 500_000_000n; // Default 50% if no liquidity
+				: 500_000_000n;
+		}
 
 		await context.db.markets.update({
 			id: marketAddress,
@@ -206,14 +222,25 @@ ponder.on(
 			? currentNoShares
 			: currentNoShares + sharesOut;
 
-		// Recalculate yesChance based on new pool state
-		// Formula: yesChance = noPool / totalPool (scaled to 1e9)
-		// Higher NO pool means higher YES probability (less supply = higher price)
-		const totalPool = newYesCollateral + newNoCollateral;
-		const newYesChance =
-			totalPool > 0n
+		// Recalculate yesChance using time-weighted curve
+		let newYesChance: bigint;
+		if (market.marketStartTimestamp && market.marketCloseTimestamp && market.curveFlattener) {
+			newYesChance = calculatePariMutuelYesChance({
+				curveFlattener: market.curveFlattener,
+				curveOffset: market.curveOffset ?? 0,
+				totalCollateralYes: newYesCollateral,
+				totalCollateralNo: newNoCollateral,
+				currentTimestamp: timestamp,
+				marketStartTimestamp: market.marketStartTimestamp,
+				marketCloseTimestamp: market.marketCloseTimestamp,
+			});
+		} else {
+			// Fallback: simple collateral ratio
+			const totalPool = newYesCollateral + newNoCollateral;
+			newYesChance = totalPool > 0n
 				? (newNoCollateral * 1_000_000_000n) / totalPool
 				: 500_000_000n;
+		}
 
 		await context.db.markets.update({
 			id: marketAddress,

@@ -2,6 +2,7 @@ import { ponder } from "@/generated";
 import { getChainInfo, makeId } from "../utils/helpers";
 import { updateAggregateStats } from "../services/stats";
 import { getOrCreateUser } from "../services/db";
+import { PredictionPariMutuelAbi } from "../../abis/PredictionPariMutuel";
 
 ponder.on("MarketFactory:MarketCreated", async ({ event, context }) => {
 	const {
@@ -109,6 +110,31 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
 	const timestamp = event.block.timestamp;
 	const chain = getChainInfo(context);
 
+	// Read timestamps from the contract for proper yesChance calculation
+	let marketStartTimestamp = timestamp;
+	let marketCloseTimestamp = timestamp + 86400n * 7n; // Default 7 days if read fails
+
+	try {
+		const [startTs, closeTs] = await Promise.all([
+			context.client.readContract({
+				address: marketAddress,
+				abi: PredictionPariMutuelAbi,
+				functionName: "marketStartTimestamp",
+			}),
+			context.client.readContract({
+				address: marketAddress,
+				abi: PredictionPariMutuelAbi,
+				functionName: "marketCloseTimestamp",
+			}),
+		]);
+		marketStartTimestamp = BigInt(startTs);
+		marketCloseTimestamp = BigInt(closeTs);
+	} catch (err) {
+		console.warn(
+			`[${chain.chainName}] Failed to read timestamps for PariMutuel ${marketAddress}, using defaults`
+		);
+	}
+
 	const existingMarket = await context.db.markets.findUnique({
 		id: marketAddress,
 	});
@@ -127,6 +153,8 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
 				collateralToken: collateral,
 				curveFlattener: Number(curveFlattener),
 				curveOffset: Number(curveOffset),
+				marketStartTimestamp,
+				marketCloseTimestamp,
 				totalVolume: existingMarket.totalVolume,
 				totalTrades: existingMarket.totalTrades,
 				currentTvl: existingMarket.currentTvl,
@@ -154,6 +182,8 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
 				collateralToken: collateral,
 				curveFlattener: Number(curveFlattener),
 				curveOffset: Number(curveOffset),
+				marketStartTimestamp,
+				marketCloseTimestamp,
 				totalVolume: 0n,
 				totalTrades: 0,
 				currentTvl: 0n,

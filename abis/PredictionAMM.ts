@@ -374,4 +374,20 @@ export const PredictionAMMAbi = [
     stateMutability: "view",
     type: "function",
   },
+
+  /**
+   * getReserves() - Returns current pool reserves
+   * Use to calculate yesChance: yesChance = reserveNo / (reserveYes + reserveNo)
+   */
+  {
+    inputs: [],
+    name: "getReserves",
+    outputs: [
+      { name: "_reserveYes", type: "uint112" },
+      { name: "_reserveNo", type: "uint112" },
+      { name: "_marketCloseTimestamp", type: "uint32" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;
