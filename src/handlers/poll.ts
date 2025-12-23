@@ -40,7 +40,7 @@ ponder.on("PredictionPoll:ArbitrationStarted", async ({ event, context }) => {
     await context.db.polls.update({
       id: pollAddress,
       data: {
-        isDisputed: true,
+        arbitrationStarted: true,
         disputedBy: requester.toLowerCase() as `0x${string}`,
         disputeReason: reason.slice(0, 4096),
         disputeStake: stake,

@@ -81,6 +81,8 @@ export default createSchema((p) => ({
     checkEpoch: p.int(),
     /** Whether the last refresh was free */
     lastRefreshWasFree: p.boolean().optional(),
+    /** Whether arbitration has been started for this poll */
+    arbitrationStarted: p.boolean(),
     /** Poll category (0-11) */
     category: p.int(),
     /** Poll status: 0=Pending, 1=Yes, 2=No, 3=Unknown */
@@ -89,8 +91,6 @@ export default createSchema((p) => ({
     resolutionReason: p.string().optional(),
     /** Setter address (operator who set the answer, null if pending) */
     setter: p.hex().optional(),
-    /** Whether arbitration has been started for this poll */
-    isDisputed: p.boolean().optional(),
     /** Address that started arbitration (if disputed) */
     disputedBy: p.hex().optional(),
     /** Reason for the dispute */

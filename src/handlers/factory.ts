@@ -1,5 +1,5 @@
 import { ponder } from "@/generated";
-import { getChainInfo, makeId } from "../utils/helpers";
+import { getChainInfo, makeId, calculatePariMutuelYesChance } from "../utils/helpers";
 import { updateAggregateStats } from "../services/stats";
 import { getOrCreateUser } from "../services/db";
 import { PredictionPariMutuelAbi } from "../../abis/PredictionPariMutuel";
@@ -140,6 +140,28 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
 	});
 
 	if (existingMarket) {
+		// Recalculate yesChance with proper curve parameters
+		// This fixes the case where SeedInitialLiquidity fired before PariMutuelCreated
+		// and used fallback calculation without curve parameters
+		const totalYes = existingMarket.totalCollateralYes ?? 0n;
+		const totalNo = existingMarket.totalCollateralNo ?? 0n;
+		
+		let correctedYesChance: bigint = 500_000_000n;
+		if (totalYes + totalNo > 0n) {
+			correctedYesChance = calculatePariMutuelYesChance({
+				curveFlattener: Number(curveFlattener),
+				curveOffset: Number(curveOffset),
+				totalCollateralYes: totalYes,
+				totalCollateralNo: totalNo,
+				currentTimestamp: timestamp,
+				marketStartTimestamp,
+				marketCloseTimestamp,
+			});
+			console.log(
+				`[${chain.chainName}] Recalculated yesChance for ${marketAddress}: ${existingMarket.yesChance} -> ${correctedYesChance}`
+			);
+		}
+
 		await context.db.markets.update({
 			id: marketAddress,
 			data: {
@@ -161,9 +183,10 @@ ponder.on("MarketFactory:PariMutuelCreated", async ({ event, context }) => {
 				uniqueTraders: existingMarket.uniqueTraders,
 				initialLiquidity: existingMarket.initialLiquidity ?? 0n,
 				// Preserve existing PariMutuel pool state if already set
-				totalCollateralYes: existingMarket.totalCollateralYes ?? 0n,
-				totalCollateralNo: existingMarket.totalCollateralNo ?? 0n,
-				yesChance: existingMarket.yesChance ?? 500_000_000n, // Default 50%
+				totalCollateralYes: totalYes,
+				totalCollateralNo: totalNo,
+				// Use recalculated yesChance with proper curve parameters
+				yesChance: correctedYesChance,
 				createdAtBlock: event.block.number,
 				createdAt: timestamp,
 				createdTxHash: event.transaction.hash,

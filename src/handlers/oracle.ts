@@ -48,6 +48,7 @@ ponder.on("PredictionOracle:PollCreated", async ({ event, context }) => {
 			checkEpoch,
 			category,
 			status: 0,
+			arbitrationStarted: false,
 			createdAtBlock: event.block.number,
 			createdAt: timestamp,
 			createdTxHash: event.transaction.hash,
