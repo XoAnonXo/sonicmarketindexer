@@ -38,7 +38,7 @@ export const CHAINS: Record<number, ChainConfig> = {
     explorerUrl: "https://sonicscan.org",
     contracts: {
       oracle: "0x495B372311e3f9647685de3cbc90194915F3BdFE",
-      marketFactory: "0x2ff4a8497cD07C0E29F8082195300d480AfdB7Fa",
+      marketFactory: "0x1f1E915797F36a3594fFA6D4df953CC7e912b61E",
       usdc: "0xc6020e5492c2892fD63489797ce3d431ae101d5e",
     },
     startBlock: 18_190_000,
