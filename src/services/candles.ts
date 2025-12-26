@@ -2,13 +2,14 @@ import type { PonderContext } from "../utils/types";
 
 const CANDLE_PRICE_SCALE = 1_000_000_000n; // 1e9
 
-export const CANDLE_INTERVALS = ["1m", "5m", "1h"] as const;
+export const CANDLE_INTERVALS = ["1m", "5m", "1h", "1d"] as const;
 export type CandleInterval = (typeof CANDLE_INTERVALS)[number];
 
 export const INTERVAL_TO_SECONDS: Record<CandleInterval, number> = {
   "1m": 60,
   "5m": 300,
   "1h": 3600,
+  "1d": 86400,
 };
 
 function toBucketStart(timestampSec: bigint, intervalSec: number): bigint {
@@ -94,7 +95,9 @@ async function upsertCandleBucket(params: {
       ? context.db.candles1m
       : interval === "5m"
         ? context.db.candles5m
-        : context.db.candles1h;
+        : interval === "1h"
+          ? context.db.candles1h
+          : context.db.candles1d;
 
   const existing = await table.findUnique({ id: bucketId });
   if (!existing) {
@@ -184,34 +187,17 @@ export async function recordAmmPriceTickAndCandles(params: {
     },
   });
 
-  
-  await upsertCandleBucket({
-    context,
-    marketAddress,
-    interval: "1m",
-    timestamp,
-    seq,
-    priceScaled: yesPrice,
-    volume: collateralAmount,
-  });
-  await upsertCandleBucket({
-    context,
-    marketAddress,
-    interval: "5m",
-    timestamp,
-    seq,
-    priceScaled: yesPrice,
-    volume: collateralAmount,
-  });
-  await upsertCandleBucket({
-    context,
-    marketAddress,
-    interval: "1h",
-    timestamp,
-    seq,
-    priceScaled: yesPrice,
-    volume: collateralAmount,
-  });
+  for (const interval of CANDLE_INTERVALS) {
+    await upsertCandleBucket({
+      context,
+      marketAddress,
+      interval,
+      timestamp,
+      seq,
+      priceScaled: yesPrice,
+      volume: collateralAmount,
+    });
+  }
 }
 
 

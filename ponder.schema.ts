@@ -317,6 +317,24 @@ export default createSchema((p) => ({
     lastSeq: p.bigint(),
   }),
 
+  /**
+   * 1-day candles derived from priceTicks.
+   */
+  candles1d: p.createTable({
+    /** Unique ID: marketAddress-bucketStart */
+    id: p.string(),
+    marketAddress: p.hex(),
+    bucketStart: p.bigint(),
+    open: p.bigint(),
+    high: p.bigint(),
+    low: p.bigint(),
+    close: p.bigint(),
+    volume: p.bigint(),
+    trades: p.int(),
+    firstSeq: p.bigint(),
+    lastSeq: p.bigint(),
+  }),
+
   // ===========================================================================
   // USERS TABLE
   // ===========================================================================
